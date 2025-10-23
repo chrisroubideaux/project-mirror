@@ -1,0 +1,1 @@
+// components/camera/WebcamPanel.tsx
