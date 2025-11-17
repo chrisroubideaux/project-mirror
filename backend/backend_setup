@@ -1,0 +1,21 @@
+backend/
+│── app.py
+│── config.py
+│── extensions.py
+│── requirements.txt
+│
+├── users/
+│     ├── models.py
+│     ├── routes.py
+│     └── __init__.py
+│
+├── services/
+│     ├── hf_emotion.py        ← HF imports here
+│     ├── openai_client.py     ← GPT imports here
+│     ├── tts_service.py       ← HeyGen/ElevenLabs
+│     └── face_service.py      ← Face embeddings
+│
+├── routes/
+│     ├── emotion_routes.py    ← calls hf_emotion
+│     ├── aurora_routes.py     ← calls openai_client
+│     └── ...
