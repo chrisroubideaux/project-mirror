@@ -1,5 +1,5 @@
 # backend/users/oauth.py
-# backend/users/oauth.py
+
 import os
 import logging
 import requests
@@ -40,7 +40,7 @@ def google_login():
 
     return redirect("https://accounts.google.com/o/oauth2/v2/auth?" + urlencode(query))
 
-
+# Google OAuth callback
 @oauth_bp.route("/google/callback")
 def google_callback():
     code = request.args.get("code")
@@ -63,18 +63,18 @@ def google_callback():
     token_res = requests.post("https://oauth2.googleapis.com/token", data=token_data)
     access_token = token_res.json().get("access_token")
 
-    # Get user profile
+    # Get user info
     info_res = requests.get(
         "https://www.googleapis.com/oauth2/v3/userinfo",
         headers={"Authorization": f"Bearer {access_token}"},
     )
-
     info = info_res.json()
+
     email = info.get("email")
     name = info.get("name")
     picture = info.get("picture")
 
-    # Create user if not exists
+    # Create or get user
     user = User.query.filter_by(email=email).first()
     if not user:
         user = User(
@@ -89,10 +89,10 @@ def google_callback():
         db.session.add(user)
         db.session.commit()
 
-    # Issue JWT
     token = generate_jwt_token(str(user.id), user.email)
 
-    return redirect(f"{FRONTEND_URL}/profile/{user.id}?token={token}")
+    # 🚨 FIXED: send user back to login page → Login.tsx handles the redirect to profile
+    return redirect(f"{FRONTEND_URL}/login?token={token}&id={user.id}")
 
 
 # ============================================================
@@ -113,7 +113,7 @@ def facebook_login():
 
     return redirect("https://www.facebook.com/v19.0/dialog/oauth?" + urlencode(query))
 
-
+# Facebook OAuth callback
 @oauth_bp.route("/facebook/callback")
 def facebook_callback():
     code = request.args.get("code")
@@ -136,6 +136,9 @@ def facebook_callback():
     token_res = requests.get(token_url, params=params)
     access_token = token_res.json().get("access_token")
 
+    if not access_token:
+        return jsonify({"error": "Failed to obtain access token"}), 400
+
     # Fetch user data
     user_res = requests.get(
         "https://graph.facebook.com/me?fields=id,name,email,picture.type(large)",
@@ -145,12 +148,16 @@ def facebook_callback():
     info = user_res.json()
     email = info.get("email")
     name = info.get("name")
-    picture = info.get("picture", {}).get("data", {}).get("url")
+    picture = (
+        info.get("picture", {})
+        .get("data", {})
+        .get("url")
+    )
 
     if not email:
         return jsonify({"error": "Facebook did not return an email"}), 400
 
-    # Create user if not exists
+    # Create user if needed
     user = User.query.filter_by(email=email).first()
     if not user:
         user = User(
@@ -168,9 +175,8 @@ def facebook_callback():
     # Issue JWT
     token = generate_jwt_token(str(user.id), user.email)
 
-    return redirect(f"{FRONTEND_URL}/profile/{user.id}?token={token}")
-
-
+    # 🚨 FIXED: redirect to the login page — NOT the profile page
+    return redirect(f"{FRONTEND_URL}/login?token={token}&id={user.id}")
 
 
 """"""""""
