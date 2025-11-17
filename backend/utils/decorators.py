@@ -5,7 +5,7 @@ from functools import wraps
 from flask import request, jsonify
 from users.models import User
 
-SECRET = os.getenv("SECRET_KEY")   # or JWT_SECRET_KEY
+SECRET = os.getenv("JWT_SECRET_KEY", "dev-secret")
 
 def token_required(f):
     @wraps(f)
