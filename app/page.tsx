@@ -1,4 +1,5 @@
 // app/page.tsx
+// app/page.tsx
 'use client';
 
 import Nav from '@/components/nav/Nav';
@@ -18,20 +19,10 @@ export default function Home() {
   return (
     <>
       <Nav />
-
+       <AuroraHero />
+       <AuroraOrbs />
       {/* HERO SECTION */}
-      <section
-        className="position-relative"
-        style={{
-          overflow: "hidden",
-          paddingTop: "6rem",
-          paddingBottom: "6rem",
-        }}
-      >
-        <AuroraOrbs />
-        <AuroraHero />
-      </section>
-
+     
       {/* MAIN PRODUCT CARD */}
       <section style={{ paddingTop: "5rem", paddingBottom: "5rem" }}>
         <AuroraProductCard />
@@ -61,6 +52,8 @@ export default function Home() {
 
 
 {/*
+
+// app/page.tsx
 'use client';
 
 import Nav from '@/components/nav/Nav';
@@ -69,7 +62,6 @@ import Footer from '@/components/nav/Footer';
 // Hero Elements
 import AuroraHero from '@/components/hero/AuroraHero';
 import AuroraOrbs from '@/components/hero/AuroraOrbs';
-//import AITagline from '@/components/hero/AITagline';
 
 // Guest Presentation Components
 import AuroraProductCard from '@/components/guest/AuroraProductCard';
@@ -82,28 +74,45 @@ export default function Home() {
     <>
       <Nav />
 
-      
-      <div className="position-relative" style={{ overflow: "hidden" }}>
+    
+      <section
+        className="position-relative"
+        style={{
+          overflow: "hidden",
+          paddingTop: "6rem",
+          paddingBottom: "6rem",
+        }}
+      >
         <AuroraOrbs />
         <AuroraHero />
-      </div>
+      </section>
+
+   
+      <section style={{ paddingTop: "5rem", paddingBottom: "5rem" }}>
+        <AuroraProductCard />
+      </section>
 
     
-      <AuroraProductCard />
+      <section style={{ paddingTop: "6rem", paddingBottom: "6rem" }}>
+        <AuroraBentoGrid />
+      </section>
 
     
-      <AuroraBentoGrid />
+      <section style={{ paddingTop: "6rem", paddingBottom: "6rem" }}>
+        <AuroraTimeline />
+      </section>
 
     
-      <AuroraTimeline />
+      <section style={{ paddingTop: "6rem", paddingBottom: "6rem" }}>
+        <AuroraProductMosaic />
+      </section>
 
      
-       <AuroraProductMosaic />
-
-    
       <Footer />
     </>
   );
 }
+
+
 
 */}
