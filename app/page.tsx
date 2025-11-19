@@ -1,56 +1,71 @@
+// app/page.tsx
 'use client';
 
 import Nav from '@/components/nav/Nav';
 import Footer from '@/components/nav/Footer';
+
+// Hero Elements
 import AuroraHero from '@/components/hero/AuroraHero';
+import AuroraOrbs from '@/components/hero/AuroraOrbs';
+//import AITagline from '@/components/hero/AITagline';
+
+// Guest Presentation Components
+import AuroraProductCard from '@/components/guest/AuroraProductCard';
+import AuroraBentoGrid from '@/components/guest/AuroraBentoGrid';
+import AuroraTimeline from '@/components/guest/AuroraTimeline';
 
 export default function Home() {
   return (
     <>
-      {/* NAVBAR */}
       <Nav />
 
       {/* HERO SECTION */}
-      <AuroraHero />
-
-      {/* CONTENT (Optional) */}
-      <div className="container text-center py-5">
-        <h2 className="fw-bold mb-3">
-          Welcome to Project AURORA
-        </h2>
-        <p className="text-secondary">
-          Emotion AI, holographic UI, and next-generation empathy analysis.
-        </p>
+      <div className="position-relative" style={{ overflow: "hidden" }}>
+        <AuroraOrbs />
+        <AuroraHero />
       </div>
 
-      {/* FOOTER */}
+      {/* MAIN PRODUCT CARD */}
+      <AuroraProductCard />
+
+      {/* BENTO FEATURE GRID */}
+      <AuroraBentoGrid />
+
+      {/* TIMELINE / STEPS */}
+      <AuroraTimeline />
+
       <Footer />
     </>
   );
 }
+
 
 
 
 {/*
 'use client';
-import Footer from '@/components/nav/Footer';
-import Nav from '@/components/nav/Nav';
 
+import Nav from '@/components/nav/Nav';
+import Footer from '@/components/nav/Footer';
+import AuroraHero from '@/components/hero/AuroraHero';
+import AuroraOrbs from '@/components/hero/AuroraOrbs';
+import AuroraFeatureGrid from '@/components/hero/AuroraFeatureGrid';
+//import AITagline from '@/components/hero/AITagline';
 
 export default function Home() {
-  
-
   return (
     <>
-    <div className="layout-100vh ">
-    <Nav />
-    <div className="container text-center py-5">
-      <h1 className='text-dark'>Welcome to Project AURORA</h1>
-     </div>
-   
-    </div>
+      <Nav />
+
+    
+      <div className="position-relative" style={{ overflow: "hidden" }}>
+        <AuroraOrbs />
+        <AuroraHero />
+        <AuroraFeatureGrid />
+      </div>
+
+     
       <Footer />
     </>
   );
-}
 */}

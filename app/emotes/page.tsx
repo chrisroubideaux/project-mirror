@@ -5,6 +5,7 @@ import { useState } from 'react';
 import Nav from '@/components/nav/Nav';  // ← YOUR NAVBAR HERE
 import RealTimeEmotionCamera from '@/components/camera/RealTimeEmotionCamera';
 import EmpathyMeter from '@/components/emotes/EmpathyMeter';
+import GlassStatMeters from '@/components/emotes/GlassStatMeters';
 import { motion } from 'framer-motion';
 
 export default function EmotionPage() {
@@ -13,13 +14,11 @@ export default function EmotionPage() {
   return (
     <div className="">
 
-      {/* GLOBAL NAV */}
+      
       <Nav />
 
-      {/* PAGE CONTENT */}
       <div className="container text-center py-5">
 
-        {/* TITLE */}
         <motion.h1
           initial={{ opacity: 0, y: -15 }}
           animate={{ opacity: 1, y: 0 }}
@@ -54,6 +53,8 @@ export default function EmotionPage() {
             </p>
           </motion.div>
         )}
+
+        <GlassStatMeters />
 
       </div>
     </div>
