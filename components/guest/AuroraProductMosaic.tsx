@@ -1,5 +1,4 @@
 // components/guest/AuroraProductMosaic.tsx
-
 // components/guest/AuroraProductMosaic.tsx
 
 'use client';
@@ -214,6 +213,7 @@ const particlePatterns = [
     ],
   },
 ];
+
 
 
 {/*
