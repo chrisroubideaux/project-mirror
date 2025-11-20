@@ -1,6 +1,4 @@
 // components/guest/AuroraProductMosaic.tsx
-// components/guest/AuroraProductMosaic.tsx
-
 'use client';
 
 import { motion, useMotionValue, useTransform } from 'framer-motion';
@@ -18,13 +16,12 @@ export default function AuroraProductMosaic() {
   const mode = useAppSelector((state) => state.theme.mode);
 
   const items = [
-    { size: "large",  title: "Aurora Emotion Engine", desc: "A real-time emotional intelligence system powered by multimodal neural vision.", icon: <FaBrain /> },
-    { size: "medium", title: "Live Emotion Scanning", desc: "Instant emotional mapping using micro-expression analysis and facial cues.", icon: <FaCamera /> },
-    { size: "tall",   title: "Multimodal Neural Core", desc: "Processes video, audio, and behavior signals using deep fusion networks.", icon: <FaRobot /> },
-    { size: "small1", title: "Empathy Mapping", desc: "Tracks valence, arousal, empathy score, and affective resonance in real-time.", icon: <FaHeart /> },
-    { size: "wide",   title: "Avatar Emotional Mirroring", desc: "Your avatar reacts to your emotional state — even without showing your face.", icon: <FaUserAstronaut /> },
-    { size: "small2", title: "Aurora Insights", desc: "Generates daily summaries, mood trends, and emotional performance metrics.", icon: <FaChartLine /> },
-  ];
+    { size: "large",  title: "Aurora Emotion Engine", desc: "A real-time emotional intelligence system powered by multimodal neural vision.", icon: <FaBrain className='social-icon' /> },
+    { size: "medium", title: "Live Emotion Scanning", desc: "Instant emotional mapping using micro-expression analysis and facial cues.", icon: <FaCamera className='social-icon' /> },
+    { size: "tall",   title: "Multimodal Neural Core", desc: "Processes video, audio, and behavior signals using deep fusion networks.", icon: <FaRobot className="social-icon" /> },
+    { size: "small1", title: "Empathy Mapping", desc: "Tracks valence, arousal, empathy score, and affective resonance in real-time.", icon: <FaHeart className="social-icon" /> },
+    { size: "wide",   title: "Avatar Emotional Mirroring", desc: "Your avatar reacts to your emotional state — even without showing your face.", icon: <FaUserAstronaut className="social-icon" /> },
+    { size: "small2", title: "Aurora Insights", desc: "Generates daily summaries, mood trends, and emotional performance metrics.", icon: <FaChartLine className="social-icon" /> },  ];
 
   return (
     <section className="aurora-mosaic-section">

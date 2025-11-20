@@ -1,0 +1,15 @@
+.aurora-section {
+  padding-top: 6rem;
+  padding-bottom: 6rem;
+}
+.aurora-separator {
+  width: 260px;
+  height: 2px;
+  margin: 4rem auto;
+  border-radius: 50px;
+
+  background: linear-gradient(90deg, #00c8ff, #a855f7, #00ffc8);
+  filter: drop-shadow(0 0 6px rgba(0,200,255,0.55));
+}
+
+
