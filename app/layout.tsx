@@ -5,6 +5,7 @@ import 'bootstrap/dist/css/bootstrap.min.css';
 import 'react-circular-progressbar/dist/styles.css';
 import '@/styles/globals.css';
 import '@/styles/card.css';
+import '@/styles/about.css';
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
