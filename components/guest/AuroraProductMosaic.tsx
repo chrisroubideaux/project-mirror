@@ -1,5 +1,7 @@
 // components/guest/AuroraProductMosaic.tsx
 
+// components/guest/AuroraProductMosaic.tsx
+
 'use client';
 
 import { motion, useMotionValue, useTransform } from 'framer-motion';
@@ -16,7 +18,6 @@ import { useAppSelector } from '@/store/hooks';
 export default function AuroraProductMosaic() {
   const mode = useAppSelector((state) => state.theme.mode);
 
-  /* FIXED ORDER MAPPING — SAME AS OLD LAYOUT */
   const items = [
     { size: "large",  title: "Aurora Emotion Engine", desc: "A real-time emotional intelligence system powered by multimodal neural vision.", icon: <FaBrain /> },
     { size: "medium", title: "Live Emotion Scanning", desc: "Instant emotional mapping using micro-expression analysis and facial cues.", icon: <FaCamera /> },
@@ -28,6 +29,29 @@ export default function AuroraProductMosaic() {
 
   return (
     <section className="aurora-mosaic-section">
+
+      {/* Section header — correct place */}
+      <div className="text-center mb-4 mb-md-5">
+        <h2
+          className="fw-bold mb-2"
+          style={{
+            background: "linear-gradient(135deg, #00b7ff, #a855f7, #00ffc8)",
+            WebkitBackgroundClip: "text",
+            WebkitTextFillColor: "transparent",
+          }}
+        >
+          Aurora Feature Mosaic
+        </h2>
+        <p
+          className="text-secondary"
+          style={{ maxWidth: "620px", margin: "0 auto", fontSize: "0.95rem" }}
+        >
+          Explore the core systems that power Aurora&apos;s emotional intelligence —
+          from real-time scanning to avatar mirroring and long-term affective analytics.
+        </p>
+      </div>
+
+      {/* MOSAIC GRID */}
       <div
         className="aurora-mosaic-grid"
         style={{
@@ -53,20 +77,13 @@ export default function AuroraProductMosaic() {
 
 
 /* ============================================================
-   CARD WITH TILT + NANO PARTICLES
+   MOSAIC CARD
    ============================================================ */
-function MosaicCard({
-  title,
-  desc,
-  icon,
-  size,
-  index,
-  mode,
-}: any) {
 
-  const area = size; // matches grid-template-areas names exactly
+function MosaicCard({ title, desc, icon, size, index, mode }: any) {
+  const area = size;
 
-  // Tilt
+  // TILT
   const x = useMotionValue(0);
   const y = useMotionValue(0);
   const rotateX = useTransform(y, [-60, 60], [10, -10]);
@@ -78,11 +95,10 @@ function MosaicCard({
     y.set(e.clientY - (r.top + r.height / 2));
   };
 
-  // Pick particle set based on index
+  // PARTICLES
   const particles = particlePatterns[index % particlePatterns.length];
 
   return (
-    
     <motion.div
       className="aurora-mosaic-card"
       style={{
@@ -93,6 +109,8 @@ function MosaicCard({
         backdropFilter: "blur(14px)",
         overflow: "hidden",
         cursor: "pointer",
+        rotateX,
+        rotateY,
         ...(mode === "dark"
           ? {
               background: "rgba(255,255,255,0.05)",
@@ -104,17 +122,18 @@ function MosaicCard({
               border: "1.5px solid rgba(0,0,0,0.08)",
               boxShadow: "0 8px 20px rgba(0,0,0,0.08)",
             }),
-        rotateX,
-        rotateY,
       }}
       onMouseMove={handleMove}
-      onMouseLeave={() => { x.set(0); y.set(0); }}
+      onMouseLeave={() => {
+        x.set(0);
+        y.set(0);
+      }}
       initial={{ opacity: 0, y: 25 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true }}
     >
 
-      {/* NANO PARTICLE LAYER RESTORED */}
+      {/* NANO PARTICLES */}
       <div className="aurora-nano-layer">
         {particles.dots.map((d: any, i: number) => (
           <motion.span
@@ -158,17 +177,17 @@ function MosaicCard({
       {/* TITLE */}
       <h5 className="aurora-mosaic-title">{title}</h5>
 
-      {/* DESC */}
+      {/* DESCRIPTION */}
       <p className="aurora-mosaic-desc">{desc}</p>
     </motion.div>
   );
 }
 
 
-/* ============================================================
-   PARTICLE PATTERNS (RESTORED)
-   ============================================================ */
 
+/* ============================================================
+   PARTICLE PATTERNS
+   ============================================================ */
 const particlePatterns = [
   {
     dots: [
@@ -195,8 +214,6 @@ const particlePatterns = [
     ],
   },
 ];
-
-
 
 
 {/*
