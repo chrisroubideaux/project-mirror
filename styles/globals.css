@@ -5,6 +5,8 @@
   --card-bg: rgba(255, 255, 255, 0.65);
   --card-shadow: 0 8px 25px rgba(0, 0, 0, 0.05);
   --transition-speed: 0.3s;
+  --aurora-bento-bg: rgba(255,255,255,0.55);
+  --aurora-bento-border: rgba(0,0,0,0.08);
 }
 
 html[data-theme="dark"] {
@@ -12,6 +14,8 @@ html[data-theme="dark"] {
   --foreground: #ededed;
   --card-bg: rgba(20, 20, 20, 0.7);
   --card-shadow: 0 8px 25px rgba(255, 255, 255, 0.05);
+  --aurora-bento-bg: rgba(10,10,15,0.45);
+  --aurora-bento-border: rgba(255,255,255,0.08);
 }
 
 /* ---------- Hero Section ---------- */
