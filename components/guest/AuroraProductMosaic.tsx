@@ -1,5 +1,5 @@
 // components/guest/AuroraProductMosaic.tsx
-// components/guest/AuroraProductMosaic.tsx
+
 'use client';
 
 import { motion, useMotionValue, useTransform } from 'framer-motion';
@@ -16,85 +16,45 @@ import { useAppSelector } from '@/store/hooks';
 export default function AuroraProductMosaic() {
   const mode = useAppSelector((state) => state.theme.mode);
 
+  /* FIXED ORDER MAPPING — SAME AS OLD LAYOUT */
   const items = [
-    {
-      title: "Aurora Emotion Engine",
-      desc: "A real-time emotional intelligence system powered by multimodal neural vision.",
-      icon: <FaBrain />,
-      size: "large",
-    },
-    {
-      title: "Live Emotion Scanning",
-      desc: "Instant emotional mapping using micro-expression analysis and facial cues.",
-      icon: <FaCamera />,
-      size: "medium",
-    },
-    {
-      title: "Multimodal Neural Core",
-      desc: "Processes video, audio, and behavior signals using deep fusion networks.",
-      icon: <FaRobot />,
-      size: "tall",
-    },
-    {
-      title: "Empathy Mapping",
-      desc: "Tracks valence, arousal, empathy score, and affective resonance in real-time.",
-      icon: <FaHeart />,
-      size: "small",
-    },
-    {
-      title: "Avatar Emotional Mirroring",
-      desc: "Your avatar reacts to your emotional state — even without showing your face.",
-      icon: <FaUserAstronaut />,
-      size: "wide",
-    },
-    {
-      title: "Aurora Insights",
-      desc: "Generates daily summaries, mood trends, and emotional performance metrics.",
-      icon: <FaChartLine />,
-      size: "small",
-    },
+    { size: "large",  title: "Aurora Emotion Engine", desc: "A real-time emotional intelligence system powered by multimodal neural vision.", icon: <FaBrain /> },
+    { size: "medium", title: "Live Emotion Scanning", desc: "Instant emotional mapping using micro-expression analysis and facial cues.", icon: <FaCamera /> },
+    { size: "tall",   title: "Multimodal Neural Core", desc: "Processes video, audio, and behavior signals using deep fusion networks.", icon: <FaRobot /> },
+    { size: "small1", title: "Empathy Mapping", desc: "Tracks valence, arousal, empathy score, and affective resonance in real-time.", icon: <FaHeart /> },
+    { size: "wide",   title: "Avatar Emotional Mirroring", desc: "Your avatar reacts to your emotional state — even without showing your face.", icon: <FaUserAstronaut /> },
+    { size: "small2", title: "Aurora Insights", desc: "Generates daily summaries, mood trends, and emotional performance metrics.", icon: <FaChartLine /> },
   ];
 
   return (
     <section className="aurora-mosaic-section">
-      {/* Section header */}
-      <div className="text-center mb-4 mb-md-5">
-        <h2
-          className="fw-bold mb-2"
-          style={{
-            background: "linear-gradient(135deg, #00b7ff, #a855f7, #00ffc8)",
-            WebkitBackgroundClip: "text",
-            WebkitTextFillColor: "transparent",
-          }}
-        >
-          Aurora Feature Mosaic
-        </h2>
-        <p
-          className="text-secondary"
-          style={{ maxWidth: "620px", margin: "0 auto", fontSize: "0.95rem" }}
-        >
-          Explore the core systems that power Aurora&apos;s emotional
-          intelligence — from real-time scanning to avatar mirroring and
-          long-term affective analytics.
-        </p>
-      </div>
-
-      {/* Mosaic grid */}
-      <div className="aurora-mosaic-container">
-        <div className="aurora-mosaic-grid">
-          {items.map((item, i) => (
-            <MosaicCard key={i} {...item} index={i} mode={mode} />
-          ))}
-        </div>
+      <div
+        className="aurora-mosaic-grid"
+        style={{
+          maxWidth: "1200px",
+          margin: "3rem auto",
+          display: "grid",
+          gap: "22px",
+          gridTemplateColumns: "1fr 1fr 1fr",
+          gridTemplateAreas: `
+            "large  large  medium"
+            "tall   small1 medium"
+            "tall   wide   small2"
+          `
+        }}
+      >
+        {items.map((item, i) => (
+          <MosaicCard key={i} index={i} {...item} mode={mode} />
+        ))}
       </div>
     </section>
   );
 }
 
-/* ============================================================
-   Card Component with 3D tilt + nano particles
-   ============================================================ */
 
+/* ============================================================
+   CARD WITH TILT + NANO PARTICLES
+   ============================================================ */
 function MosaicCard({
   title,
   desc,
@@ -102,135 +62,111 @@ function MosaicCard({
   size,
   index,
   mode,
-}: {
-  title: string;
-  desc: string;
-  icon: any;
-  size: string;
-  index: number;
-  mode: "light" | "dark";
-}) {
-  // 3D tilt motion values
+}: any) {
+
+  const area = size; // matches grid-template-areas names exactly
+
+  // Tilt
   const x = useMotionValue(0);
   const y = useMotionValue(0);
   const rotateX = useTransform(y, [-60, 60], [10, -10]);
   const rotateY = useTransform(x, [-60, 60], [-10, 10]);
 
-  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const offsetX = e.clientX - (rect.left + rect.width / 2);
-    const offsetY = e.clientY - (rect.top + rect.height / 2);
-    x.set(offsetX);
-    y.set(offsetY);
+  const handleMove = (e: any) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    x.set(e.clientX - (r.left + r.width / 2));
+    y.set(e.clientY - (r.top + r.height / 2));
   };
 
-  const handleMouseLeave = () => {
-    x.set(0);
-    y.set(0);
-  };
-
-  const iconStyle = {
-    fontSize: "2.4rem",
-    marginBottom: "0.6rem",
-    background: "linear-gradient(135deg, #00c8ff, #a855f7, #00ffd0)",
-    WebkitBackgroundClip: "text",
-    WebkitTextFillColor: "transparent",
-    filter:
-      mode === "dark"
-        ? "drop-shadow(0 0 8px rgba(0,200,255,0.35))"
-        : "drop-shadow(0 0 4px rgba(0,0,0,0.15))",
-  };
-
-  // Deterministic nano-particle layout per card (no Math.random → no hydration issues)
-  const particleLayout = particlePatterns[index % particlePatterns.length];
+  // Pick particle set based on index
+  const particles = particlePatterns[index % particlePatterns.length];
 
   return (
+    
     <motion.div
+      className="aurora-mosaic-card"
       style={{
-        perspective: 900,
+        gridArea: area,
+        position: "relative",
+        padding: "1.5rem",
+        borderRadius: "22px",
+        backdropFilter: "blur(14px)",
+        overflow: "hidden",
+        cursor: "pointer",
+        ...(mode === "dark"
+          ? {
+              background: "rgba(255,255,255,0.05)",
+              border: "1.5px solid rgba(255,255,255,0.14)",
+              boxShadow: "0 0 20px rgba(0,200,255,0.15)",
+            }
+          : {
+              background: "linear-gradient(135deg, #ffffffdd, #f6f8ffcc)",
+              border: "1.5px solid rgba(0,0,0,0.08)",
+              boxShadow: "0 8px 20px rgba(0,0,0,0.08)",
+            }),
+        rotateX,
+        rotateY,
       }}
-      className={`size-${size}`}
-      onMouseMove={handleMouseMove}
-      onMouseLeave={handleMouseLeave}
+      onMouseMove={handleMove}
+      onMouseLeave={() => { x.set(0); y.set(0); }}
+      initial={{ opacity: 0, y: 25 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true }}
     >
-      <motion.div
-        initial={{ opacity: 0, y: 25, scale: 0.96 }}
-        whileInView={{ opacity: 1, y: 0, scale: 1 }}
-        viewport={{ once: true }}
-        transition={{ duration: 0.6, delay: index * 0.06 }}
-        whileHover={{
-          scale: 1.03,
-          boxShadow:
-            mode === "dark"
-              ? "0 0 28px rgba(0,200,255,0.45)"
-              : "0 8px 25px rgba(0,0,0,0.12)",
-        }}
+
+      {/* NANO PARTICLE LAYER RESTORED */}
+      <div className="aurora-nano-layer">
+        {particles.dots.map((d: any, i: number) => (
+          <motion.span
+            key={i}
+            className="aurora-nano-dot"
+            style={{ top: d.top, left: d.left }}
+            animate={{ opacity: [0.4, 1, 0.4], scale: [1, 1.3, 1] }}
+            transition={{ duration: 3 + d.delay, repeat: Infinity }}
+          />
+        ))}
+
+        {particles.lines.map((l: any, i: number) => (
+          <motion.span
+            key={i}
+            className="aurora-nano-line"
+            style={{
+              top: l.top,
+              left: l.left,
+              width: l.width,
+              transform: `rotate(${l.angle}deg)`
+            }}
+            animate={{ opacity: [0.1, 0.5, 0.1] }}
+            transition={{ duration: 4 + l.delay, repeat: Infinity }}
+          />
+        ))}
+      </div>
+
+      {/* ICON */}
+      <div
         style={{
-          rotateX,
-          rotateY,
+          fontSize: "2.4rem",
+          marginBottom: ".6rem",
+          background: "linear-gradient(135deg,#00c8ff,#a855f7,#00ffd0)",
+          WebkitBackgroundClip: "text",
+          WebkitTextFillColor: "transparent",
         }}
-        className={`aurora-mosaic-card size-${size}`}
-        data-theme={mode}
       >
-        {/* Nano particle HUD layer */}
-        <div className="aurora-nano-layer">
-          {particleLayout.dots.map((dot, i) => (
-            <motion.span
-              key={i}
-              className="aurora-nano-dot"
-              style={{
-                top: dot.top,
-                left: dot.left,
-              }}
-              animate={{
-                opacity: [0.4, 1, 0.4],
-                scale: [1, 1.3, 1],
-              }}
-              transition={{
-                duration: 3 + dot.delay,
-                repeat: Infinity,
-                repeatType: "mirror",
-              }}
-            />
-          ))}
+        {icon}
+      </div>
 
-          {particleLayout.lines.map((line, i) => (
-            <motion.span
-              key={i}
-              className="aurora-nano-line"
-              style={{
-                top: line.top,
-                left: line.left,
-                width: line.width,
-                transform: `rotate(${line.angle}deg)`,
-              }}
-              animate={{
-                opacity: [0.1, 0.5, 0.1],
-              }}
-              transition={{
-                duration: 4 + line.delay,
-                repeat: Infinity,
-                repeatType: "mirror",
-              }}
-            />
-          ))}
-        </div>
+      {/* TITLE */}
+      <h5 className="aurora-mosaic-title">{title}</h5>
 
-        {/* Icon */}
-        <div style={iconStyle}>{icon}</div>
-
-        {/* Title */}
-        <h5 className="aurora-mosaic-title">{title}</h5>
-
-        {/* Description */}
-        <p className="aurora-mosaic-desc">{desc}</p>
-      </motion.div>
+      {/* DESC */}
+      <p className="aurora-mosaic-desc">{desc}</p>
     </motion.div>
   );
 }
 
+
 /* ============================================================
-   Nano-particle patterns (no randomness → SSR safe)
+   PARTICLE PATTERNS (RESTORED)
    ============================================================ */
 
 const particlePatterns = [
@@ -258,19 +194,9 @@ const particlePatterns = [
       { top: "72%", left: "46%", width: "55px", angle: 16, delay: 0.7 },
     ],
   },
-  {
-    dots: [
-      { top: "16%", left: "65%", delay: 0.15 },
-      { top: "34%", left: "18%", delay: 0.35 },
-      { top: "56%", left: "76%", delay: 0.6 },
-      { top: "82%", left: "30%", delay: 0.95 },
-    ],
-    lines: [
-      { top: "24%", left: "50%", width: "50px", angle: 22, delay: 0.4 },
-      { top: "60%", left: "26%", width: "65px", angle: -20, delay: 0.8 },
-    ],
-  },
 ];
+
+
 
 
 {/*
