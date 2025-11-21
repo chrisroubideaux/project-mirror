@@ -52,7 +52,7 @@ export default function AuroraProductCard() {
           WebkitTextFillColor: "transparent",
         }}
       >
-        <FaStar />
+        <FaStar className="social-icon" />
       </motion.div>
 
       <h1
@@ -66,7 +66,7 @@ export default function AuroraProductCard() {
         Meet AURORA
       </h1>
 
-      <p className="text-secondary fs-5 mx-auto" style={{ maxWidth: "620px" }}>
+      <p className="text-secondary fs-5 mx-auto fs-3" style={{ maxWidth: "620px" }}>
         A next-generation Emotion Intelligence Engine that reads, interprets, and
         visualizes human emotion using advanced multimodal AI, psychology, and
         adaptive modeling.

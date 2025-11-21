@@ -1,4 +1,5 @@
 // components/nav/Nav.tsx
+// components/nav/Nav.tsx
 'use client';
 
 import Link from 'next/link';
@@ -10,7 +11,7 @@ import ThemeToggleButton from '@/components/ThemeToggleButton';
 import { FaBars, FaTimes } from 'react-icons/fa';
 import { useEffect, useState } from 'react';
 
-// ⭐ NEW 3D Logo
+// 3D Logo
 import AuroraLogo3D from '@/components/nav/AuroraLogo3D';
 
 export default function Navbar() {
@@ -32,7 +33,6 @@ export default function Navbar() {
   const links = [
     { label: 'Home', href: '/' },
     { label: 'About', href: '/about' },
-    { label: 'Contact', href: '/contact' }
   ];
 
   return (
@@ -73,7 +73,7 @@ export default function Navbar() {
         >
           <div className="container-fluid d-flex justify-content-between align-items-center">
 
-            {/* ⭐ BRAND WITH LOGO */}
+            {/* BRAND */}
             <Link
               href="/"
               onClick={() => dispatch(closeMobileMenu())}
@@ -88,23 +88,9 @@ export default function Navbar() {
               >
                 <AuroraLogo3D />
               </div>
-
-              <span
-                className="fw-bold"
-                style={{
-                  fontSize: shrink ? "1.2rem" : "1.45rem",
-                  background: isDark
-                    ? "linear-gradient(135deg, #00b7ff, #a855f7, #00ffc8)"
-                    : "linear-gradient(135deg, #2563eb, #7c3aed, #059669)",
-                  WebkitBackgroundClip: "text",
-                  WebkitTextFillColor: "transparent",
-                }}
-              >
-             
-              </span>
             </Link>
 
-            {/* ⭐ DESKTOP LINKS */}
+            {/* DESKTOP LINKS */}
             <ul className="navbar-nav d-none d-sm-flex flex-row gap-4 align-items-center mb-0">
               {links.map(({ label, href }) => {
                 const active = pathname === href;
@@ -159,28 +145,42 @@ export default function Navbar() {
                 );
               })}
 
-              {/* ⭐ CLEAN LOGIN BUTTON */}
-              <motion.li whileHover={{ scale: 1.08 }}>
+              {/* CLEAN LOGIN — no border, no outline */}
+              <motion.li whileHover={{ scale: 1.1 }}>
                 <Link
                   href="/login"
-                  className="btn btn-outline-primary rounded-pill px-3 fw-semibold"
+                  className="fw-semibold"
                   style={{
-                    borderColor: isDark
-                      ? "rgba(0,180,255,0.6)"
-                      : "rgba(59,130,246,0.6)",
-                    color: isDark ? "#e0f8ff" : "#1e3a8a",
-                    backdropFilter: "blur(6px)",
+                    padding: "6px 12px",
+                    borderRadius: "999px",
+                    textDecoration: "none",
+                    color: isDark ? "#9aeaff" : "#2563eb",
+                    fontSize: "1rem",
+                    background: "transparent",
+                    border: "none",
+                    boxShadow: "none",
                   }}
                 >
                   Login
                 </Link>
               </motion.li>
 
-              {/* Theme Toggle */}
-              <li><ThemeToggleButton className="btn-sm" /></li>
+              {/* THEME TOGGLE — border removed */}
+              <li>
+                <div
+                  style={{
+                    background: "transparent",
+                    border: "none",
+                    boxShadow: "none",
+                    padding: "4px",
+                  }}
+                >
+                  <ThemeToggleButton className="btn-sm" />
+                </div>
+              </li>
             </ul>
 
-            {/* ⭐ MOBILE MENU BUTTON */}
+            {/* MOBILE MENU BUTTON */}
             <button
               className="navbar-toggler border-0 d-sm-none"
               onClick={() => dispatch(toggleMobileMenu())}
@@ -208,7 +208,7 @@ export default function Navbar() {
         </motion.nav>
       </motion.div>
 
-      {/* ⭐ MOBILE MENU DROPDOWN (UPDATED!) */}
+      {/* MOBILE MENU */}
       {mobileMenuOpen && (
         <motion.div
           initial={{ opacity: 0, y: -12 }}
@@ -242,7 +242,7 @@ export default function Navbar() {
               </motion.li>
             ))}
 
-            {/* ⭐ MOBILE LOGIN LINK */}
+            {/* MOBILE LOGIN */}
             <motion.li whileTap={{ scale: 0.97 }}>
               <Link
                 href="/login"
@@ -259,10 +259,19 @@ export default function Navbar() {
               </Link>
             </motion.li>
 
-            {/* Theme toggle */}
             <li className="mt-3">
-              <ThemeToggleButton className="btn-sm" />
+              <div
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  boxShadow: "none",
+                  padding: "4px",
+                }}
+              >
+                <ThemeToggleButton className="btn-sm" />
+              </div>
             </li>
+         
           </ul>
         </motion.div>
       )}

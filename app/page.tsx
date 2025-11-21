@@ -10,39 +10,38 @@ import AuroraOrbs from '@/components/hero/AuroraOrbs';
 
 // Guest Presentation Components
 import AuroraProductCard from '@/components/guest/AuroraProductCard';
-import AuroraBentoGrid from '@/components/guest/AuroraBentoGrid';
+//import AuroraBentoGrid from '@/components/guest/AuroraBentoGrid';
 import AuroraTimeline from '@/components/guest/AuroraTimeline';
 import AuroraProductMosaic from '@/components/guest/AuroraProductMosaic';
+
+import NeonSeparator from '@/components/about/NeonSeparator';
 
 export default function Home() {
   return (
     <>
       <Nav />
-       <AuroraHero />
-       <AuroraOrbs />
-      {/* HERO SECTION */}
-     
+      <AuroraHero />
+      <AuroraOrbs />
+
       {/* MAIN PRODUCT CARD */}
       <section style={{ paddingTop: "5rem", paddingBottom: "5rem" }}>
         <AuroraProductCard />
       </section>
 
-      {/* BENTO FEATURE GRID */}
-      <section style={{ paddingTop: "6rem", paddingBottom: "6rem" }}>
-        <AuroraBentoGrid />
-      </section>
+      <NeonSeparator />
 
       {/* TIMELINE / STEPS */}
       <section style={{ paddingTop: "6rem", paddingBottom: "6rem" }}>
         <AuroraTimeline />
       </section>
 
+      <NeonSeparator />
+
       {/* PRODUCT MOSAIC */}
       <section style={{ paddingTop: "6rem", paddingBottom: "6rem" }}>
         <AuroraProductMosaic />
       </section>
 
-      {/* FOOTER */}
       <Footer />
     </>
   );

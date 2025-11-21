@@ -163,8 +163,8 @@ export default function TechnologyStack() {
                 {t.icon}
               </div>
               <p
-                className="text-secondary fw-medium mt-2"
-                style={{ fontSize: ".95rem" }}
+                className="text-secondary fw-medium mt-2 fs-5"
+               
               >
                 {t.label}
               </p>

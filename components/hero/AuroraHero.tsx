@@ -80,7 +80,7 @@ export default function AuroraHero() {
           initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1, duration: 0.9 }}
-          className="display-3 fw-bold mb-3"
+          className="display-3 fw-bold mb-3 display-4"
           style={{
             background:
               "linear-gradient(135deg, #00b7ff, #a855f7, #00ffc8)",
@@ -96,7 +96,7 @@ export default function AuroraHero() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.3, duration: 0.9 }}
-          className="lead mb-4"
+          className="lead mb-4 fs-4"
           style={{
             color: "var(--foreground)",
             opacity: 0.85,
