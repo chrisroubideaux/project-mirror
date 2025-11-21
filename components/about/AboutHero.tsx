@@ -69,7 +69,7 @@ export default function AboutHero() {
         initial={{ opacity: 0, y: 18 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.75, delay: 0.35 }}
-        className="text-secondary mt-4"
+        className=" mt-4"
         style={{
           maxWidth: "720px",
           margin: "0 auto",
