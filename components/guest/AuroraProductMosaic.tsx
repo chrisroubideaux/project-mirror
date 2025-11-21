@@ -29,18 +29,18 @@ export default function AuroraProductMosaic() {
       {/* Section header — correct place */}
       <div className="text-center mb-4 mb-md-5">
         <h2
-          className="fw-bold mb-2"
+          className="fw-bold mb-2 display-5"
           style={{
             background: "linear-gradient(135deg, #00b7ff, #a855f7, #00ffc8)",
             WebkitBackgroundClip: "text",
             WebkitTextFillColor: "transparent",
           }}
         >
-          Aurora Feature Mosaic
+          Aurora Features
         </h2>
         <p
           className="text-secondary"
-          style={{ maxWidth: "620px", margin: "0 auto", fontSize: "0.95rem" }}
+          style={{ maxWidth: "620px", margin: "0 auto", fontSize: "1.5rem" }}
         >
           Explore the core systems that power Aurora&apos;s emotional intelligence —
           from real-time scanning to avatar mirroring and long-term affective analytics.
@@ -64,7 +64,7 @@ export default function AuroraProductMosaic() {
         }}
       >
         {items.map((item, i) => (
-          <MosaicCard key={i} index={i} {...item} mode={mode} />
+          <MosaicCard key={i} index={i} {...item} mode={mode}  />
         ))}
       </div>
     </section>
@@ -171,10 +171,10 @@ function MosaicCard({ title, desc, icon, size, index, mode }: any) {
       </div>
 
       {/* TITLE */}
-      <h5 className="aurora-mosaic-title">{title}</h5>
+      <h4 className="aurora-mosaic-title">{title}</h4>
 
       {/* DESCRIPTION */}
-      <p className="aurora-mosaic-desc">{desc}</p>
+      <p className="aurora-mosaic-desc" style={{  fontSize: "1.38rem" }}>{desc}</p>
     </motion.div>
   );
 }

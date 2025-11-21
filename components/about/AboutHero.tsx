@@ -73,7 +73,7 @@ export default function AboutHero() {
         style={{
           maxWidth: "720px",
           margin: "0 auto",
-          fontSize: "1.1rem",
+          fontSize: "1.5rem",
           zIndex: 3,
           position: "relative",
         }}

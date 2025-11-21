@@ -16,8 +16,6 @@ export default function AboutPage() {
      <AboutHero />
       <NeonSeparator />
     
-    
-
       <SectionWrapper>
         <AuroraPhilosophy />
       </SectionWrapper>

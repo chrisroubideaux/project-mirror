@@ -191,7 +191,7 @@ export default function MissionSection() {
 
               <h5 className="fw-bold mb-2">{item.title}</h5>
 
-              <p className="text-secondary" style={{ fontSize: ".95rem" }}>
+              <p className="text-secondary fs-5">
                 {item.desc}
               </p>
             </motion.div>

@@ -18,6 +18,23 @@ html[data-theme="dark"] {
   --aurora-bento-border: rgba(255,255,255,0.08);
 }
 
+:root {
+  font-family: var(--font-barlow-condensed), sans-serif;
+}
+
+h1, h2, h3, .hero-title {
+  font-family: var(--font-barlow-condensed), sans-serif;
+  font-weight: 200;
+  letter-spacing: 0.5px;
+}
+
+p {
+  line-height: 1.6;
+  font-size: 1rem;
+}
+
+
+
 /* ---------- Hero Section ---------- */
 
 @keyframes gradientFlow {

@@ -18,28 +18,28 @@ export default function AuroraTimeline() {
   const steps = [
     {
       title: "Scan",
-      icon: <FaCamera />,
+      icon: <FaCamera className="social-icon" />,
       desc:
         "Aurora begins with a passive scan, capturing subtle emotional indicators through micro-expressions and facial cues.",
       orbColor: "rgba(0,180,255,0.28)",
     },
     {
       title: "Analyze",
-      icon: <FaBrain />,
+      icon: <FaBrain className="social-icon" />,
       desc:
         "Multimodal AI processes emotional signals using deep neural inference, detecting patterns invisible to the human eye.",
       orbColor: "rgba(168,85,247,0.30)",
     },
     {
       title: "Visualize",
-      icon: <FaChartPie />,
+      icon: <FaChartPie className="social-icon" />,
       desc:
         "Your emotional state becomes a mapped spectrum — valence, arousal, and affective gradients rendered visually.",
       orbColor: "rgba(0,255,200,0.30)",
     },
     {
       title: "Reflect",
-      icon: <FaEye />,
+      icon: <FaEye className="social-icon" />,
       desc:
         "Aurora mirrors your emotional landscape with clear insights and visual feedback.",
       orbColor: "rgba(255,255,255,0.20)",
@@ -450,9 +450,9 @@ export default function AuroraTimeline() {
                   </div>
 
                   <p
-                    className="text-secondary"
+                    className="text-secondary fs-4"
                     style={{
-                      fontSize: "0.92rem",
+                     
                       lineHeight: "1.4rem",
                       maxWidth: "550px",
                     }}
@@ -517,8 +517,8 @@ export default function AuroraTimeline() {
               </div>
 
               <p
-                className="text-secondary ps-4"
-                style={{ fontSize: "0.92rem", lineHeight: "1.4rem" }}
+                className="text-secondary ps-4 fs-4"
+                style={{ lineHeight: "1.4rem" }}
               >
                 {step.desc}
               </p>
