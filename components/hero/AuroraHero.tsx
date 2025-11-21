@@ -102,7 +102,7 @@ export default function AuroraHero() {
             opacity: 0.85,
           }}
         >
-          Emotion Recognition & Empathy Engine — Powered by AI, Psychology, and Multimodal Deep Learning.
+         A next-generation Emotion Recognition & Empathy Engine — fusing AI, machine learning, behavioral psychology, and multimodal deep learning into one intelligent emotional system.
         </motion.p>
 
         {/* BUTTONS */}
