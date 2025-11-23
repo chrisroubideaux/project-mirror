@@ -2,7 +2,7 @@
 'use client';
 
 import { useState } from 'react';
-import Nav from '@/components/nav/Nav';  // ← YOUR NAVBAR HERE
+import Nav from '@/components/nav/Nav';  
 import RealTimeEmotionCamera from '@/components/camera/RealTimeEmotionCamera';
 import EmpathyMeter from '@/components/emotes/EmpathyMeter';
 import GlassStatMeters from '@/components/emotes/GlassStatMeters';

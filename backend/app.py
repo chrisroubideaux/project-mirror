@@ -1,18 +1,18 @@
 # backend/app.py
-# backend/app.py
+
+from dotenv import load_dotenv
+load_dotenv()   # ✅ MUST BE FIRST
 
 import os
 import sys
 from flask import Flask, jsonify
 from flask_cors import CORS
 from flask_migrate import Migrate
-from dotenv import load_dotenv
 
 # Ensure imports work when running from root
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-# Load environment variables
-load_dotenv()
+# ✅ Now it's safe to import anything that uses os.getenv()
 
 # Extensions
 from extensions import db, jwt
@@ -26,7 +26,6 @@ from users.oauth import oauth_bp
 
 # AI / Emotion routes
 from routes.emotion_routes import emotion_bp
-# (later) from routes.aurora_routes import aurora_bp
 
 # Migration manager
 migrate = Migrate()
