@@ -16,20 +16,33 @@ export default function RealTimeEmotionCamera({ onEmotion }: Props) {
   // setInterval -> number in the browser
   const intervalRef = useRef<number | null>(null);
 
-  // For voice logic
+  // Voice tracking
   const lastSpokenStateRef = useRef<string | null>(null);
-  const lastSpokenAtRef = useRef<number>(0); // timestamp (ms)
+  const lastSpokenAtRef = useRef<number>(0);
   const lastScoreRef = useRef<number | null>(null);
 
   const [streaming, setStreaming] = useState(false);
   const [showFullscreen, setShowFullscreen] = useState(false);
   const [emotionResult, setEmotionResult] = useState<any | null>(null);
 
-  // ----------------------------------------
+  // --------------------------------------------------
+  // AUDIO UNLOCK (for browser autoplay rules)
+  // --------------------------------------------------
+  const unlockAudio = () => {
+    const a = new Audio();
+    a.play().catch(() => {
+      // ignore — this is just to unlock the audio context
+    });
+  };
+
+  // --------------------------------------------------
   // CAMERA CONTROL
-  // ----------------------------------------
+  // --------------------------------------------------
   const startCamera = async () => {
     try {
+      // Unlock audio first so future .play() calls are allowed
+      unlockAudio();
+
       const stream = await navigator.mediaDevices.getUserMedia({
         video: true,
         audio: false,
@@ -50,7 +63,7 @@ export default function RealTimeEmotionCamera({ onEmotion }: Props) {
     stopRealtimeLoop();
     intervalRef.current = window.setInterval(() => {
       captureFrame();
-    }, 1000); // 1 FPS – good balance of responsiveness vs cost
+    }, 1000); // 1 FPS – balance between responsiveness and API cost
   };
 
   const stopRealtimeLoop = () => {
@@ -61,6 +74,7 @@ export default function RealTimeEmotionCamera({ onEmotion }: Props) {
   };
 
   useEffect(() => {
+    // Cleanup on unmount
     return () => {
       stopRealtimeLoop();
       const stream = videoRef.current?.srcObject as MediaStream | null;
@@ -68,9 +82,9 @@ export default function RealTimeEmotionCamera({ onEmotion }: Props) {
     };
   }, []);
 
-  // ----------------------------------------
+  // --------------------------------------------------
   // BACKEND: EMOTION + AURORA VOICE
-  // ----------------------------------------
+  // --------------------------------------------------
   const captureFrame = async () => {
     if (!videoRef.current) return;
 
@@ -79,6 +93,7 @@ export default function RealTimeEmotionCamera({ onEmotion }: Props) {
 
     canvas.width = video.videoWidth || 640;
     canvas.height = video.videoHeight || 480;
+
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
@@ -104,7 +119,7 @@ export default function RealTimeEmotionCamera({ onEmotion }: Props) {
       setEmotionResult(data);
       if (onEmotion) onEmotion(data);
 
-      // Hybrid voice logic
+      // Voice logic
       await maybeSpeakAurora(data);
     } catch (err) {
       console.error('Real-time emotion error:', err);
@@ -119,7 +134,7 @@ export default function RealTimeEmotionCamera({ onEmotion }: Props) {
     const arousal: number | undefined = data.arousal;
     const dominance: number | undefined = data.dominance;
 
-    // confidence/score field
+    // Primary score (confidence)
     const score: number | null =
       typeof data.score === 'number'
         ? data.score
@@ -127,7 +142,7 @@ export default function RealTimeEmotionCamera({ onEmotion }: Props) {
         ? data.confidence
         : null;
 
-    // Guard: need PAD + meaningful state
+    // Need valid PAD + a meaningful state
     if (
       typeof valence !== 'number' ||
       typeof arousal !== 'number' ||
@@ -144,11 +159,10 @@ export default function RealTimeEmotionCamera({ onEmotion }: Props) {
     }
 
     const now = Date.now();
-    const COOLDOWN_MS = 15000; // 15 seconds, therapist pace
+    const COOLDOWN_MS = 15000; // 15 seconds, therapist style
 
-    // ✅ Cooldown gate – don't let Aurora talk too often
+    // Cooldown gate
     if (now - lastSpokenAtRef.current < COOLDOWN_MS) {
-      // Still update lastScoreRef so we can compare later
       if (score !== null) {
         lastScoreRef.current = score;
       }
@@ -158,32 +172,32 @@ export default function RealTimeEmotionCamera({ onEmotion }: Props) {
     const prevState = lastSpokenStateRef.current;
     const prevScore = lastScoreRef.current;
 
-    // ✅ Hybrid logic:
-    //  - Speak if emotional state changed
-    //  - OR if intensity jumped significantly
     let shouldSpeak = false;
 
+    // 1) Different emotional state
     if (prevState !== state) {
       shouldSpeak = true;
-    } else if (
+    }
+    // 2) Same state but intensity jumps
+    else if (
       score !== null &&
       prevScore !== null &&
       Math.abs(score - prevScore) > 0.25 // 25% jump threshold
     ) {
       shouldSpeak = true;
-    } else if (score !== null && prevScore === null) {
-      // First time we ever got a score
+    }
+    // 3) First time ever
+    else if (score !== null && prevScore === null) {
       shouldSpeak = true;
     }
 
-    // Update lastScoreRef for next comparison
     if (score !== null) {
       lastScoreRef.current = score;
     }
 
     if (!shouldSpeak) return;
 
-    // Record the time + state
+    // Record last spoken state & time
     lastSpokenStateRef.current = state;
     lastSpokenAtRef.current = now;
 
@@ -208,9 +222,9 @@ export default function RealTimeEmotionCamera({ onEmotion }: Props) {
     }
   };
 
-  // ----------------------------------------
+  // --------------------------------------------------
   // DERIVED HUD VALUES
-  // ----------------------------------------
+  // --------------------------------------------------
   const dominantLabel: string | null =
     emotionResult?.emotion ||
     emotionResult?.dominant_emotion ||
@@ -244,9 +258,9 @@ export default function RealTimeEmotionCamera({ onEmotion }: Props) {
   const auroraLine: string | null = emotionResult?.aurora_response || null;
   const emotionalState: string | null = emotionResult?.state || null;
 
-  // ----------------------------------------
-  // UI: SAME AESTHETIC AS BEFORE
-  // ----------------------------------------
+  // --------------------------------------------------
+  // UI
+  // --------------------------------------------------
   return (
     <>
       {/* MAIN CARD */}
@@ -646,6 +660,8 @@ export default function RealTimeEmotionCamera({ onEmotion }: Props) {
     </>
   );
 }
+
+
 
 {/*
 'use client';
