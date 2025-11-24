@@ -59,8 +59,6 @@ def analyze(current_user):
         return jsonify({"error": f"Server error: {str(e)}"}), 500
 
 
-
-
 """"""""""
 # backend/routes/emotion_routes.py
 

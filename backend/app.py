@@ -23,6 +23,7 @@ from users.models import User, EmotionalProfile, FaceEmbedding
 # User routes
 from users.routes import user_bp
 from users.oauth import oauth_bp
+from routes.aurora_routes import aurora_bp
 
 # AI / Emotion routes
 from routes.emotion_routes import emotion_bp
@@ -45,11 +46,12 @@ def create_app():
     ]
 
     CORS(
-        app,
-        resources={r"/*": {"origins": ALLOWED_ORIGINS}},
-        supports_credentials=True,
-        expose_headers=["Content-Type", "Authorization"]
+    app,
+    resources={r"/api/*": {"origins": "*"}},
+    methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization"],
     )
+
 
     # ----------------------------------------------------
     # Flask Config
@@ -75,8 +77,8 @@ def create_app():
     # ----------------------------------------------------
     app.register_blueprint(user_bp)      # /api/users/*
     app.register_blueprint(oauth_bp)     # /auth/*
-    app.register_blueprint(emotion_bp)   # /api/emotion/*   ← YES!
-    # app.register_blueprint(aurora_bp)  # later: /api/aurora/*
+    app.register_blueprint(emotion_bp)   # /api/emotion/*
+    app.register_blueprint(aurora_bp)
 
     # ----------------------------------------------------
     # Health Check
