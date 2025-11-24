@@ -24,6 +24,7 @@ from users.models import User, EmotionalProfile, FaceEmbedding
 from users.routes import user_bp
 from users.oauth import oauth_bp
 from routes.aurora_routes import aurora_bp
+from routes.whisper_routes import whisper_bp
 
 # AI / Emotion routes
 from routes.emotion_routes import emotion_bp
@@ -79,6 +80,7 @@ def create_app():
     app.register_blueprint(oauth_bp)     # /auth/*
     app.register_blueprint(emotion_bp)   # /api/emotion/*
     app.register_blueprint(aurora_bp)
+    app.register_blueprint(whisper_bp)
 
     # ----------------------------------------------------
     # Health Check
