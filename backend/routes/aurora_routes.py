@@ -1,103 +1,77 @@
 # backend/routes/aurora_routes.py
+# backend/routes/aurora_routes.py
 
 from flask import Blueprint, request, jsonify, send_file
-from services.emotion_logic import generate_response
-from services.aurora_speech import text_to_speech
-from services.aurora_dialogue import generate_dialogue_response
-
-from services.aurora_brain import aurora_reply
-from services.aurora_speech import text_to_speech
-
 from io import BytesIO
+from services.aurora_whisper import aurora_whisper_reply
+from services.aurora_whisper import speech_to_text
+from services.aurora_speech import text_to_speech
 
 aurora_bp = Blueprint("aurora", __name__, url_prefix="/api/aurora")
 
-@aurora_bp.route("/speak", methods=["POST"])
-def speak():
-    """
-    Expects:
-      {
-        "valence": 0.9,
-        "arousal": 0.6,
-        "dominance": 0.7
-      }
-    Returns:
-      - JSON + MP3 audio stream
-    """
-    data = request.get_json()
 
-    p = data.get("valence")
-    a = data.get("arousal")
-    d = data.get("dominance")
-
-    if p is None or a is None or d is None:
-        return jsonify({"error": "Missing PAD values"}), 400
-
-    # 1️⃣ Get emotional state + message
-    result = generate_response(p, a, d)
-    message = result["aurora_response"]
-
-    # 2️⃣ Convert to speech
-    audio_bytes = text_to_speech(message)
-
-    # 3️⃣ Return MP3 audio
-    return send_file(
-        BytesIO(audio_bytes),
-        mimetype="audio/mpeg",
-        as_attachment=False
-    )
-
-@aurora_bp.route("/reply", methods=["POST"])
-def reply():
-    """
-    Conversational mode:
-    User text + emotional state → Aurora's spoken reply
-
-    Expects:
-    {
-      "user_text": "I'm just stressed",
-      "state": "distress",
-      "valence": 0.2,
-      "arousal": 0.8,
-      "dominance": 0.3
-    }
-
-    Returns:
-      - JSON + MP3 audio stream
-    """
-    data = request.get_json()
-
-    user_text = data.get("user_text", "")
-    state = data.get("state", "uncertain")
-    p = data.get("valence")
-    a = data.get("arousal")
-    d = data.get("dominance")
-
-    if not user_text:
-        return jsonify({"error": "Missing user_text"}), 400
-
-    # 1️⃣ Generate Aurora's text reply
-    aurora_text = generate_dialogue_response(user_text, state, p, a, d)
-
-    # 2️⃣ Convert to speech
-    audio_bytes = text_to_speech(aurora_text)
-
-    # 3️⃣ Return JSON + audio
-    return send_file(
-        BytesIO(audio_bytes),
-        mimetype="audio/mpeg",
-        as_attachment=False,
-        download_name="aurora_reply.mp3"
-    )
-    
 @aurora_bp.route("/greet", methods=["GET"])
 def greet():
-    """
-    Aurora's automatic session greeting.
-    Returns MP3 audio.
-    """
-    greeting = "Hello, my name is Aurora. How are you feeling today?"
+    message = "Hi, I’m Aurora. Whenever you’re ready, you can speak to me."
+    audio = text_to_speech(message)
+    return send_file(BytesIO(audio), mimetype="audio/mpeg")
 
+
+@aurora_bp.route("/converse", methods=["POST"])
+def converse():
+    if "audio" not in request.files:
+        return jsonify({"error": "audio required"}), 400
+
+    audio_bytes = request.files["audio"].read()
+
+    # Whisper → text
+    user_text = speech_to_text(audio_bytes)
+
+    # Emotion context (optional if frontend sends it)
+    state = request.form.get("state")
+    valence = request.form.get("valence")
+    arousal = request.form.get("arousal")
+    dominance = request.form.get("dominance")
+
+    # GPT → response
+    reply = aurora_whisper_reply(
+        user_text,
+        state=state,
+        valence=valence,
+        arousal=arousal,
+        dominance=dominance,
+    )
+
+    # TTS
+    audio_out = text_to_speech(reply)
+
+    return send_file(BytesIO(audio_out), mimetype="audio/mpeg")
+
+
+
+
+"""""""""""""""""
+from flask import Blueprint, request, jsonify, send_file
+from io import BytesIO
+
+# Emotion-based speech
+from services.emotion_logic import generate_response
+from services.aurora_speech import text_to_speech
+
+# Conversational Aurora (Whisper + GPT persona)
+from services.aurora_whisper import speech_to_text, aurora_reply
+
+
+aurora_bp = Blueprint("aurora", __name__, url_prefix="/api/aurora")
+
+
+# -------------------------------------------------------------
+# 1) GREETING (fires when camera session begins)
+# -------------------------------------------------------------
+@aurora_bp.route("/greet", methods=["GET"])
+def greet():
+   
+    greeting = "Hello, I'm Aurora. How are you feeling today?"
     audio_bytes = text_to_speech(greeting)
 
     return send_file(
@@ -105,29 +79,64 @@ def greet():
         mimetype="audio/mpeg",
         as_attachment=False
     )
+
+
+# -------------------------------------------------------------
+# 2) SPEAK BASED ON EMOTIONAL STATE (PAD values)
+# -------------------------------------------------------------
+@aurora_bp.route("/speak", methods=["POST"])
+def speak():
+   
     
-    
-@aurora_bp.route("/voice-chat", methods=["POST"])
-def voice_chat():
-    """
-    Accepts audio -> Whisper STT -> Aurora GPT -> ElevenLabs TTS -> MP3
-    """
-    if "audio" not in request.files:
-        return jsonify({"error": "No audio provided"}), 400
+    data = request.get_json()
+    p = data.get("valence")
+    a = data.get("arousal")
+    d = data.get("dominance")
 
-    audio_bytes = request.files["audio"].read()
+    if p is None or a is None or d is None:
+        return jsonify({"error": "Missing PAD values"}), 400
 
-    # 1️⃣ Speech-to-Text
-    user_text = speech_to_text(audio_bytes)
+    # Generate emotional state + Aurora's reaction
+    result = generate_response(p, a, d)
+    aurora_text = result["aurora_response"]
 
-    # 2️⃣ Aurora's conversational reply
-    ai_reply = aurora_reply(user_text)
-
-    # 3️⃣ Convert to speech
-    audio_bytes_out = text_to_speech(ai_reply)
+    audio_bytes = text_to_speech(aurora_text)
 
     return send_file(
-        BytesIO(audio_bytes_out),
+        BytesIO(audio_bytes),
         mimetype="audio/mpeg",
         as_attachment=False
     )
+
+
+# -------------------------------------------------------------
+# 3) FULL VOICE CONVERSATION
+# Whisper → GPT → ElevenLabs TTS
+# -------------------------------------------------------------
+@aurora_bp.route("/converse", methods=["POST"])
+def aurora_converse():
+   
+    if "audio" not in request.files:
+        return jsonify({"error": "Audio file required"}), 400
+
+    # 1) Read audio blob from request
+    audio_bytes = request.files["audio"].read()
+
+    # 2) Convert voice → text
+    user_text = speech_to_text(audio_bytes)
+    if not user_text:
+        return jsonify({"error": "Whisper failed to transcribe"}), 500
+
+    # 3) Generate GPT-based Aurora response (persona included)
+    reply_text = aurora_reply(user_text)
+
+    # 4) Convert text → voice
+    audio_out = text_to_speech(reply_text)
+
+    # 5) Return MP3 stream
+    return send_file(
+        BytesIO(audio_out),
+        mimetype="audio/mpeg",
+        as_attachment=False
+    )
+"""""""""""""""

@@ -1,5 +1,55 @@
 # backend/routes/emotion_routes.py
+# backend/routes/emotion_routes.py
 
+from flask import Blueprint, request, jsonify
+from services.hf_emotion import analyze_emotion
+from services.emotion_logic import emotion_signal
+from utils.decorators import token_required_optional   # ⭐ RESTORED
+
+emotion_bp = Blueprint("emotion", __name__, url_prefix="/api/emotion")
+
+@emotion_bp.route("/analyze", methods=["POST"])
+@token_required_optional   # ⭐ RESTORED
+def analyze_emotion_route(current_user=None):
+    """
+    Analyze emotion from image.  
+    Token is optional:
+      - Guest users: works normally
+      - Logged-in users: emotion can be tied to their account
+    """
+    try:
+        # Get image bytes
+        if "image" in request.files:
+            image_bytes = request.files["image"].read()
+        else:
+            return jsonify({"error": "No image provided"}), 400
+
+        # HuggingFace → emotion + PAD
+        result = analyze_emotion(image_bytes)
+
+        p, a, d = result["valence"], result["arousal"], result["dominance"]
+
+        # Only state + PAD (no therapist speech)
+        emotion = emotion_signal(p, a, d)
+
+        # Optional: attach user info
+        user_id = current_user.id if current_user else None
+
+        return jsonify({
+            "user_id": user_id,
+            "emotion": result["emotion"],
+            "score": result["score"],
+            "state": emotion["state"],
+            "valence": emotion["valence"],
+            "arousal": emotion["arousal"],
+            "dominance": emotion["dominance"],
+        })
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+""""""""""
 # backend/routes/emotion_routes.py
 
 from flask import Blueprint, request, jsonify
@@ -13,16 +63,7 @@ emotion_bp = Blueprint("emotion", __name__, url_prefix="/api/emotion")
 @emotion_bp.route("/analyze", methods=["POST"])
 @token_required_optional
 def analyze(current_user):
-    """
-    Analyze facial emotion from an image.
-
-    Returns full emotional intelligence:
-      - emotion
-      - score
-      - valence, arousal, dominance (PAD)
-      - state
-      - aurora_response
-    """
+   
 
     try:
         # 1) Extract Image Bytes
@@ -69,58 +110,6 @@ def analyze(current_user):
     except Exception as e:
         return jsonify({"error": f"Server error: {str(e)}"}), 500
 
-
-""""""""""
-# backend/routes/emotion_routes.py
-
-from flask import Blueprint, request, jsonify
-from utils.decorators import token_required_optional
-from services.hf_emotion import analyze_emotion, EmotionServiceError
-
-emotion_bp = Blueprint("emotion", __name__, url_prefix="/api/emotion")
-
-
-@emotion_bp.route("/analyze", methods=["POST"])
-@token_required_optional
-def analyze(current_user):
-   
-    try:
-        # 1) Extract Image
-        image_bytes = None
-
-        if "image" in request.files:
-            image_bytes = request.files["image"].read()
-        elif request.content_type and request.content_type.startswith("image/"):
-            image_bytes = request.data
-
-        if not image_bytes:
-            return jsonify({"error": "No image provided"}), 400
-
-        # 2) Run Emotion Analysis
-        result = analyze_emotion(image_bytes)
-
-        # 3) Full emotional intelligence response
-        response = {
-            "emotion": result["emotion"],
-            "score": result["score"],
-            "valence": result["valence"],
-            "arousal": result["arousal"],
-            "dominance": result["dominance"],
-            "state": result["state"],
-            "aurora_response": result["aurora_response"],
-            "raw": result["raw"],
-        }
-
-        if current_user:
-            response["user_id"] = str(current_user.id)
-
-        return jsonify(response), 200
-
-    except EmotionServiceError as e:
-        return jsonify({"error": str(e)}), 502
-
-    except Exception as e:
-        return jsonify({"error": f"Server error: {str(e)}"}), 500
 
 
 
