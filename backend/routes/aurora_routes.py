@@ -3,8 +3,8 @@
 
 from flask import Blueprint, request, jsonify, send_file
 from io import BytesIO
-from services.aurora_whisper import aurora_whisper_reply
-from services.aurora_whisper import speech_to_text
+
+from services.aurora_whisper import speech_to_text, aurora_whisper_reply
 from services.aurora_speech import text_to_speech
 
 aurora_bp = Blueprint("aurora", __name__, url_prefix="/api/aurora")
@@ -12,41 +12,66 @@ aurora_bp = Blueprint("aurora", __name__, url_prefix="/api/aurora")
 
 @aurora_bp.route("/greet", methods=["GET"])
 def greet():
-    message = "Hi, I’m Aurora. Whenever you’re ready, you can speak to me."
+    """
+    Initial greeting when the user starts a session.
+    """
+    message = "Hi, I’m Aurora. Whenever you’re ready, you can talk to me."
     audio = text_to_speech(message)
     return send_file(BytesIO(audio), mimetype="audio/mpeg")
 
 
 @aurora_bp.route("/converse", methods=["POST"])
 def converse():
+    """
+    Main voice endpoint:
+    - Accepts audio from the browser (MediaRecorder/webm)
+    - Whisper → text
+    - Aurora (GPT) → reply (with short memory + emotion tone)
+    - ElevenLabs → MP3 audio
+    """
     if "audio" not in request.files:
         return jsonify({"error": "audio required"}), 400
 
     audio_bytes = request.files["audio"].read()
+    if not audio_bytes:
+        return jsonify({"error": "empty audio"}), 400
 
-    # Whisper → text
+    # 1) STT
     user_text = speech_to_text(audio_bytes)
+    if not user_text:
+        # No usable speech; just return 204 so frontend skips playback
+        return "", 204
 
-    # Emotion context (optional if frontend sends it)
+    # 2) Optional emotion context (passed from frontend)
     state = request.form.get("state")
-    valence = request.form.get("valence")
-    arousal = request.form.get("arousal")
-    dominance = request.form.get("dominance")
 
-    # GPT → response
+    def parse_float(name: str):
+        raw = request.form.get(name)
+        if raw is None or raw == "":
+            return None
+        try:
+            return float(raw)
+        except ValueError:
+            return None
+
+    valence = parse_float("valence")
+    arousal = parse_float("arousal")
+    dominance = parse_float("dominance")
+
+    # 3) GPT reply with persona + emotion tone + short memory
     reply = aurora_whisper_reply(
-        user_text,
+        user_text=user_text,
+        persona="therapist",
         state=state,
         valence=valence,
         arousal=arousal,
         dominance=dominance,
     )
 
-    # TTS
+    # 4) TTS (ElevenLabs)
     audio_out = text_to_speech(reply)
 
     return send_file(BytesIO(audio_out), mimetype="audio/mpeg")
-
 
 
 

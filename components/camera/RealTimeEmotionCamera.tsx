@@ -1,5 +1,6 @@
 // components/camera/RealTimeEmotionCamera.tsx
-"use client";
+// components/camera/RealTimeEmotionCamera.tsx
+'use client';
 
 import { useEffect, useRef, useState } from "react";
 
@@ -11,11 +12,11 @@ export default function RealTimeEmotionCamera({ onEmotion }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const fullVideoRef = useRef<HTMLVideoElement>(null);
 
-  // loops / flags
-  const emotionIntervalRef = useRef<number | null>(null);
+  // INTERVALS / FLAGS
+  const intervalRef = useRef<number | null>(null);
   const conversationActiveRef = useRef<boolean>(false);
 
-  // UI state
+  // UI
   const [streaming, setStreaming] = useState(false);
   const [showFullscreen, setShowFullscreen] = useState(false);
   const [emotionResult, setEmotionResult] = useState<any | null>(null);
@@ -25,13 +26,11 @@ export default function RealTimeEmotionCamera({ onEmotion }: Props) {
   // ------------------------------------------------------
   const unlockAudio = () => {
     const a = new Audio();
-    a.play().catch(() => {
-      // ignored – just to satisfy autoplay policy after a click
-    });
+    a.play().catch(() => {});
   };
 
   // ------------------------------------------------------
-  // CAMERA START / STOP
+  // START CAMERA
   // ------------------------------------------------------
   const startCamera = async () => {
     try {
@@ -47,20 +46,23 @@ export default function RealTimeEmotionCamera({ onEmotion }: Props) {
 
       setStreaming(true);
 
-      // 1) start emotion polling
       startEmotionPolling();
-
-      // 2) Aurora greeting (wait until done)
       await playGreeting();
 
-      // 3) then auto voice conversation loop
-      startAutoConversationLoop();
+      // give greeting a moment, then start voice loop
+      setTimeout(() => {
+        startAutoConversationLoop();
+      }, 1500);
+
     } catch (err) {
       console.error("Camera error:", err);
       alert("Camera access blocked.");
     }
   };
 
+  // ------------------------------------------------------
+  // STOP CAMERA & CLEANUP
+  // ------------------------------------------------------
   const stopAll = () => {
     stopEmotionPolling();
     conversationActiveRef.current = false;
@@ -70,9 +72,6 @@ export default function RealTimeEmotionCamera({ onEmotion }: Props) {
 
     const s2 = fullVideoRef.current?.srcObject as MediaStream | null;
     s2?.getTracks().forEach((t) => t.stop());
-
-    setStreaming(false);
-    setShowFullscreen(false);
   };
 
   useEffect(() => {
@@ -80,17 +79,18 @@ export default function RealTimeEmotionCamera({ onEmotion }: Props) {
   }, []);
 
   // ------------------------------------------------------
-  // EMOTION POLLING (NO SPEAKING)
+  // EMOTION POLLING (OpenAI Vision)
   // ------------------------------------------------------
   const startEmotionPolling = () => {
     stopEmotionPolling();
-    emotionIntervalRef.current = window.setInterval(captureFrame, 1000);
+    // Vision can handle ~1–2 calls/sec fine; 1.5s is a good middle ground
+    intervalRef.current = window.setInterval(captureFrame, 1500);
   };
 
   const stopEmotionPolling = () => {
-    if (emotionIntervalRef.current) {
-      clearInterval(emotionIntervalRef.current);
-      emotionIntervalRef.current = null;
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
     }
   };
 
@@ -98,20 +98,29 @@ export default function RealTimeEmotionCamera({ onEmotion }: Props) {
     if (!videoRef.current) return;
 
     const video = videoRef.current;
+
+    // If video is not ready yet, skip this tick
     if (!video.videoWidth || !video.videoHeight) return;
 
+    const targetWidth = 360;
+    const aspect =
+      video.videoHeight && video.videoWidth
+        ? video.videoHeight / video.videoWidth
+        : 3 / 4;
+
     const canvas = document.createElement("canvas");
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
+    canvas.width = targetWidth;
+    canvas.height = Math.round(targetWidth * aspect);
 
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    ctx.drawImage(video, 0, 0);
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
     const blob: Blob | null = await new Promise((resolve) =>
-      canvas.toBlob(resolve, "image/jpeg")
+      canvas.toBlob(resolve, "image/jpeg", 0.7)
     );
+
     if (!blob) return;
 
     const formData = new FormData();
@@ -124,7 +133,8 @@ export default function RealTimeEmotionCamera({ onEmotion }: Props) {
       });
 
       if (!res.ok) {
-        console.error("Emotion API error:", await res.text());
+        const txt = await res.text();
+        console.error("Emotion analyze error:", txt);
         return;
       }
 
@@ -137,36 +147,23 @@ export default function RealTimeEmotionCamera({ onEmotion }: Props) {
   };
 
   // ------------------------------------------------------
-  // GREETING – WAIT UNTIL AUDIO FINISHES
+  // GREETING (runs once)
   // ------------------------------------------------------
-  const playGreeting = async (): Promise<void> => {
+  const playGreeting = async () => {
     try {
-      const res = await fetch("http://localhost:5000/api/aurora/greet", {
-        method: "GET",
-      });
-
-      if (!res.ok) {
-        console.error("Aurora greet error:", await res.text());
-        return;
-      }
+      const res = await fetch("http://localhost:5000/api/aurora/greet");
+      if (!res.ok) return;
 
       const blob = await res.blob();
-      const audioUrl = URL.createObjectURL(blob);
-      const audio = new Audio(audioUrl);
-
-      // Resolve when greeting finishes (or fails)
-      await new Promise<void>((resolve) => {
-        audio.onended = () => resolve();
-        audio.onerror = () => resolve();
-        audio.play().catch(() => resolve());
-      });
+      const audio = new Audio(URL.createObjectURL(blob));
+      audio.play();
     } catch (err) {
       console.error("Greeting error:", err);
     }
   };
 
   // ------------------------------------------------------
-  // AUTO CONVERSATION LOOP (MIC → /aurora/converse)
+  // AUTO CONVERSATION LOOP
   // ------------------------------------------------------
   const startAutoConversationLoop = () => {
     if (conversationActiveRef.current) return;
@@ -176,8 +173,7 @@ export default function RealTimeEmotionCamera({ onEmotion }: Props) {
 
   const scheduleNextTurn = () => {
     if (!conversationActiveRef.current) return;
-    // small pause between turns
-    setTimeout(recordVoiceTurn, 800);
+    setTimeout(recordVoiceTurn, 500); // small delay between turns
   };
 
   const recordVoiceTurn = async () => {
@@ -186,20 +182,18 @@ export default function RealTimeEmotionCamera({ onEmotion }: Props) {
         audio: true,
       });
 
-      const chunks: Blob[] = [];
+      let chunks: Blob[] = [];
       const rec = new MediaRecorder(stream);
 
       rec.ondataavailable = (e: BlobEvent) => {
-        if (e.data && e.data.size > 0) {
-          chunks.push(e.data);
-        }
+        if (e.data.size > 0) chunks.push(e.data);
       };
 
       rec.onstop = async () => {
         try {
           const blob = new Blob(chunks, { type: "audio/webm" });
 
-          // If user didn't really speak, skip
+          // Ignore near-silent / no-speech turns
           if (blob.size > 4000) {
             await sendToAurora(blob);
           }
@@ -212,17 +206,16 @@ export default function RealTimeEmotionCamera({ onEmotion }: Props) {
       };
 
       rec.start();
-      // record ~4.5s per turn
+      // ~4 seconds per turn
       setTimeout(() => {
-        if (rec.state !== "inactive") {
-          rec.stop();
-        }
-      }, 4500);
+        if (rec.state !== "inactive") rec.stop();
+      }, 4000);
     } catch (err) {
       console.error("Mic error:", err);
-      if (conversationActiveRef.current) {
-        setTimeout(scheduleNextTurn, 3000);
-      }
+      setTimeout(
+        () => conversationActiveRef.current && scheduleNextTurn(),
+        2000
+      );
     }
   };
 
@@ -242,8 +235,7 @@ export default function RealTimeEmotionCamera({ onEmotion }: Props) {
       }
 
       const outBlob = await res.blob();
-      const audioUrl = URL.createObjectURL(outBlob);
-      const audio = new Audio(audioUrl);
+      const audio = new Audio(URL.createObjectURL(outBlob));
       audio.play();
     } catch (err) {
       console.error("Converse error:", err);
@@ -251,19 +243,18 @@ export default function RealTimeEmotionCamera({ onEmotion }: Props) {
   };
 
   // ------------------------------------------------------
-  // UI HELPERS
+  // UI Helpers
   // ------------------------------------------------------
-  const dominant =
+  const dominant: string | null =
     emotionResult?.emotion ||
-    emotionResult?.dominant_emotion ||
     emotionResult?.label ||
     null;
 
-  const confidence =
-    typeof emotionResult?.score === "number"
-      ? emotionResult.score
-      : typeof emotionResult?.confidence === "number"
+  const confidence: number | null =
+    typeof emotionResult?.confidence === "number"
       ? emotionResult.confidence
+      : typeof emotionResult?.score === "number"
+      ? emotionResult.score
       : null;
 
   // ------------------------------------------------------
@@ -302,17 +293,17 @@ export default function RealTimeEmotionCamera({ onEmotion }: Props) {
             style={{ objectFit: "cover" }}
           />
 
-          {/* LIVE BADGE */}
+          {/* LIVE */}
           {streaming && (
             <div
               className="position-absolute top-0 end-0 m-3 px-2 py-1 rounded-pill text-white"
-              style={{ background: "rgba(255,0,0,0.85)", fontSize: ".8rem" }}
+              style={{ background: "rgba(255,0,0,0.85)" }}
             >
               LIVE
             </div>
           )}
 
-          {/* EMOTION HUD */}
+          {/* HUD */}
           {streaming && (
             <div
               className="position-absolute start-0 bottom-0 m-3 p-3 rounded-3"
@@ -321,16 +312,38 @@ export default function RealTimeEmotionCamera({ onEmotion }: Props) {
                 backdropFilter: "blur(10px)",
               }}
             >
-              <strong>{dominant || "Detecting…"}</strong>
-              {confidence !== null && (
-                <span className="ms-2 text-info">
-                  {(confidence * 100).toFixed(0)}%
-                </span>
+              <div style={{ fontSize: "0.75rem", color: "#9ca3af" }}>
+                Emotion Snapshot
+              </div>
+              <div className="d-flex align-items-baseline">
+                <strong style={{ fontSize: "0.95rem" }}>
+                  {dominant || "Detecting…"}
+                </strong>
+                {confidence !== null && (
+                  <span className="ms-2 text-info" style={{ fontSize: "0.8rem" }}>
+                    {(confidence * 100).toFixed(0)}%
+                  </span>
+                )}
+              </div>
+
+              {/* PAD preview (optional small text) */}
+              {emotionResult && (
+                <div style={{ fontSize: "0.7rem", marginTop: "0.2rem" }}>
+                  <span className="me-2">
+                    V: {((emotionResult.valence ?? 0.5) * 100).toFixed(0)}%
+                  </span>
+                  <span className="me-2">
+                    A: {((emotionResult.arousal ?? 0.5) * 100).toFixed(0)}%
+                  </span>
+                  <span>
+                    D: {((emotionResult.dominance ?? 0.5) * 100).toFixed(0)}%
+                  </span>
+                </div>
               )}
             </div>
           )}
 
-          {/* FULLSCREEN */}
+          {/* FULLSCREEN BTN */}
           {streaming && (
             <button
               onClick={() => setShowFullscreen(true)}
@@ -341,7 +354,7 @@ export default function RealTimeEmotionCamera({ onEmotion }: Props) {
           )}
         </div>
 
-        {/* START / STOP */}
+        {/* START / STOP BUTTON */}
         {!streaming ? (
           <button
             className="btn w-100 py-2 fs-5 fw-semibold"
@@ -353,11 +366,7 @@ export default function RealTimeEmotionCamera({ onEmotion }: Props) {
         ) : (
           <button
             className="btn w-100 py-2 fs-5 fw-semibold"
-            onClick={() => {
-              stopAll();
-              // optional: hard reset page
-              // window.location.reload();
-            }}
+            onClick={() => window.location.reload()}
             style={{ background: "rgba(40,40,40,.85)", borderRadius: "14px" }}
           >
             Stop Session
@@ -365,7 +374,7 @@ export default function RealTimeEmotionCamera({ onEmotion }: Props) {
         )}
       </div>
 
-      {/* FULLSCREEN MODAL */}
+      {/* FULLSCREEN */}
       {showFullscreen && (
         <div
           className="modal fade show"
