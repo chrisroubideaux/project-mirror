@@ -1,3 +1,4 @@
+# backend/services/aurora_dialogue.py
 def generate_dialogue_response(user_text, state, p, a, d):
     user_text = user_text.lower()
 
