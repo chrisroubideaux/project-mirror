@@ -1,189 +1,253 @@
 # backend/services/aurora_whisper.py
 # backend/services/aurora_whisper.py
-
 import os
 import io
-from collections import deque
-from typing import Dict, Any, List, Optional
-
+from typing import List, Dict, Any, Optional
 from openai import OpenAI
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-# ---------------------------------------------------------
-# PERSONAS
-# ---------------------------------------------------------
-PERSONAS: Dict[str, str] = {
-    "therapist": """
-You are Aurora — a gentle, emotionally mature therapist.
-Your tone is warm, grounding, validating, and calm.
-Avoid clinical or diagnostic language.
-Keep responses human, supportive, and 1–3 sentences.
-""",
-    "friend": """
-You are Aurora — a supportive, funny, down-to-earth friend.
-Use warm, casual language. Be encouraging and relatable.
-Keep responses 1–3 sentences.
-""",
-    "companion": """
-You are Aurora — a soft, affectionate long-term companion.
-Warm, caring, emotionally intuitive and nurturing.
-Keep responses 1–3 sentences.
-""",
-    "guide": """
-You are Aurora — a wise, grounded guide.
-You blend intuition, emotional insight, and clear reasoning.
-Calm, concise, slightly poetic but very clear. 1–3 sentences.
-""",
-}
-
-# ---------------------------------------------------------
-# SHORT-TERM MEMORY (last 6 messages)
-# ---------------------------------------------------------
-# We keep the last few user/assistant turns to maintain coherence.
-CONVERSATION_HISTORY: deque = deque(maxlen=6)
+# -------------------------------------------------------------------
+# 1. SIMPLE IN-MEMORY CONTEXT (last 4 turns)
+# -------------------------------------------------------------------
+CONTEXT_BUFFER: List[Dict[str, str]] = []
+MAX_TURNS = 4  # user+assistant pairs
 
 
-def _build_system_prompt(
-    persona: str,
-    emotion_state: Optional[str],
-    pad: Optional[Dict[str, float]],
-    was_interrupted: bool,
-) -> str:
-    base = PERSONAS.get(persona.lower(), PERSONAS["therapist"])
-
-    language_rule = """
-You are speaking to the user via voice only.
-Always reply in natural, conversational ENGLISH only.
-Do not switch languages, even if input text looks foreign.
-Do not invent specific facts or details that the user has not mentioned.
-Keep replies grounded, empathetic, and 1–3 sentences long.
-"""
-
-    interruption_note = ""
-    if was_interrupted:
-        interruption_note = """
-You were interrupted mid-sentence previously.
-Acknowledge the interruption gently if appropriate (once), then continue naturally.
-Do not apologize repeatedly.
-"""
-
-    emotion_note = ""
-    if emotion_state or pad:
-        emotion_note = "\nThe camera is giving you a sense of the user's emotional state.\n"
-
-        if emotion_state:
-            emotion_note += f"High-level state: {emotion_state}.\n"
-
-        if pad:
-            v = pad.get("valence")
-            a = pad.get("arousal")
-            d = pad.get("dominance")
-            emotion_note += (
-                "PAD (Pleasure/Valence, Arousal, Dominance) hints:\n"
-                f"- Valence (0–1): {v}\n"
-                f"- Arousal (0–1): {a}\n"
-                f"- Dominance (0–1): {d}\n"
-                "Use these only to adjust your *tone*, not to diagnose.\n"
-            )
-
-    return base + language_rule + interruption_note + emotion_note
+def add_to_context(role: str, content: str) -> None:
+    """
+    Store the last few turns in a tiny memory ring.
+    Example: {"role": "user", "content": "..."}
+    """
+    if not content:
+        return
+    CONTEXT_BUFFER.append({"role": role, "content": content})
+    # Only keep last N messages
+    while len(CONTEXT_BUFFER) > MAX_TURNS * 2:
+        CONTEXT_BUFFER.pop(0)
 
 
-# ---------------------------------------------------------
-# SPEECH → TEXT (Whisper)
-# ---------------------------------------------------------
+def get_recent_context() -> List[Dict[str, str]]:
+    """
+    Returns a shallow copy of the last few turns.
+    """
+    return CONTEXT_BUFFER[-MAX_TURNS * 2 :]
+
+
+# -------------------------------------------------------------------
+# 2. SPEECH → TEXT (Whisper)
+# -------------------------------------------------------------------
 def speech_to_text(audio_bytes: bytes) -> str:
-    """
-    Convert raw audio bytes (webm from browser) into text using OpenAI STT.
-    """
     print("DEBUG — incoming audio size:", len(audio_bytes))
 
-    if not audio_bytes or len(audio_bytes) < 1500:
+    if not audio_bytes or len(audio_bytes) < 2000:
         print("Whisper STT Error: Audio too short or empty")
         return ""
 
     try:
         audio_file = io.BytesIO(audio_bytes)
-        # Match browser encoding (we send audio/webm from frontend)
+        # MUST match frontend mime type (MediaRecorder webm)
         audio_file.name = "speech.webm"
 
         transcript = client.audio.transcriptions.create(
             model="gpt-4o-transcribe",
             file=audio_file,
-            language="en",
+            language="en",  # bias strongly toward English
         )
 
         text = (transcript.text or "").strip()
         print("DEBUG — Whisper text:", text)
         return text
-
     except Exception as e:
         print("Whisper STT Error:", repr(e))
         return ""
 
 
-# ---------------------------------------------------------
-# GPT REPLY (Aurora Brain)
-# ---------------------------------------------------------
-def aurora_whisper_reply(
-    user_text: str,
-    persona: str = "therapist",
-    emotion_state: Optional[str] = None,
-    pad: Optional[Dict[str, float]] = None,
-    was_interrupted: bool = False,
-) -> str:
+# -------------------------------------------------------------------
+# 3. LIGHTWEIGHT EMOTION ESTIMATE (from text)
+# -------------------------------------------------------------------
+def estimate_emotion_from_text(user_text: str) -> Dict[str, Any]:
     """
-    Main brain function:
-    - Uses short-term conversation memory
-    - Blends in emotion hints (PAD + state)
-    - Handles interruption-friendly tone
+    Cheap single-call classifier using GPT: give
+    - coarse emotion label
+    - valence / arousal / dominance (0–1)
+    - short internal tag (used only for tone, not spoken)
+    """
+    if not user_text:
+        return {
+            "label": "neutral",
+            "valence": 0.5,
+            "arousal": 0.4,
+            "dominance": 0.5,
+            "state": "neutral",
+        }
+
+    try:
+        resp = client.chat.completions.create(
+            model="gpt-4o-mini",
+            temperature=0.2,
+            max_tokens=80,
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You are an emotion classifier. "
+                        "Given a short user utterance, output a JSON object with:\n"
+                        "{\n"
+                        '  "label": one of ["joy","sadness","anger","fear","anxiety","frustration","calm","neutral"],\n'
+                        '  "valence": number 0-1,\n'
+                        '  "arousal": number 0-1,\n'
+                        '  "dominance": number 0-1,\n'
+                        '  "state": short 1-2 word emotional state label\n'
+                        "}\n"
+                        "Do not include any extra text, just JSON."
+                    ),
+                },
+                {"role": "user", "content": user_text},
+            ],
+        )
+
+        raw = resp.choices[0].message.content.strip()
+
+        # quick + dirty JSON parsing without importing json if malformed
+        import json
+
+        try:
+            parsed = json.loads(raw)
+        except Exception:
+            # fallback if model adds text
+            start = raw.find("{")
+            end = raw.rfind("}")
+            if start != -1 and end != -1:
+                parsed = json.loads(raw[start : end + 1])
+            else:
+                raise
+
+        label = parsed.get("label", "neutral")
+        valence = float(parsed.get("valence", 0.5))
+        arousal = float(parsed.get("arousal", 0.4))
+        dominance = float(parsed.get("dominance", 0.5))
+        state = parsed.get("state", label)
+
+        return {
+            "label": label,
+            "valence": max(0.0, min(1.0, valence)),
+            "arousal": max(0.0, min(1.0, arousal)),
+            "dominance": max(0.0, min(1.0, dominance)),
+            "state": state,
+        }
+
+    except Exception as e:
+        print("Emotion classifier error:", repr(e))
+        return {
+            "label": "neutral",
+            "valence": 0.5,
+            "arousal": 0.4,
+            "dominance": 0.5,
+            "state": "neutral",
+        }
+
+
+# -------------------------------------------------------------------
+# 4. GPT REPLY (Aurora Brain) — uses context + emotion
+# -------------------------------------------------------------------
+def aurora_brain_reply(user_text: str) -> str:
+    """
+    High-level brain: blends
+      - recent context (last 4 turns)
+      - text-based emotion signal
+    Returns a short, natural voice-friendly reply.
     """
 
     if not user_text:
-        return "I didn’t quite catch that. Could you say it one more time for me?"
+        return "I didn’t quite catch that. Could you say that again, a little closer to the microphone?"
 
-    system_prompt = _build_system_prompt(
-        persona=persona,
-        emotion_state=emotion_state,
-        pad=pad,
-        was_interrupted=was_interrupted,
-    )
+    # 1) Add user turn to context
+    add_to_context("user", user_text)
 
-    # Build message list: system + recent history + new user message
-    messages: List[Dict[str, str]] = [
-        {"role": "system", "content": system_prompt}
-    ]
+    # 2) Estimate emotion from text (cheap + fast)
+    emo = estimate_emotion_from_text(user_text)
+    state = emo["state"]
+    valence = emo["valence"]
+    arousal = emo["arousal"]
 
-    # Add prior turns from memory
-    for m in CONVERSATION_HISTORY:
-        # Each m is already {"role": "user"/"assistant", "content": "..."}
-        messages.append(m)
-
-    # Add the new user input
-    messages.append({"role": "user", "content": user_text})
-
-    try:
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=messages,
-            temperature=0.5,
-            max_tokens=150,
+    # 3) Build system prompt with emotional blending
+    #    (slightly more upbeat when valence is high, softer when low)
+    if valence < 0.35:
+        mood_line = (
+            "The user may be struggling or low. "
+            "Be especially gentle, validating, and non-judgmental."
+        )
+    elif valence > 0.7:
+        mood_line = (
+            "The user sounds fairly positive. "
+            "Reflect their energy with light warmth but don't overdo the cheerfulness."
+        )
+    else:
+        mood_line = (
+            "The user seems somewhere in the middle. "
+            "Stay steady, grounded, and calmly attentive."
         )
 
-        reply = response.choices[0].message.content.strip()
+    arousal_hint = (
+        "Their energy might be a bit activated or stressed."
+        if arousal > 0.65
+        else "Their energy seems relatively calm or soft."
+    )
+
+    system_prompt = f"""
+You are Aurora — a gentle, emotionally intelligent English-speaking voice companion.
+
+You are aware of the user's *approximate* emotional state:
+- state: {state}
+- valence: {valence:.2f}
+- arousal: {arousal:.2f}
+
+Use this information subtly. Do NOT mention valence or arousal directly.
+Just let it shape your tone.
+
+Guidelines:
+- Always reply in natural, conversational ENGLISH only.
+- 1–3 sentences max.
+- Avoid sounding like a therapist robot or using heavy clinical terms.
+- Be concise, grounded, and present.
+- Ask at most one simple follow-up question, and only if it feels natural.
+- Do NOT invent facts about the user's life; only build on what they actually said.
+
+Tone shaping:
+- {mood_line}
+- {arousal_hint}
+""".strip()
+
+    # 4) Build messages with short context
+    recent = get_recent_context()
+    messages: List[Dict[str, str]] = [{"role": "system", "content": system_prompt}]
+    messages.extend(recent)
+
+    # 5) Call GPT
+    try:
+        resp = client.chat.completions.create(
+            model="gpt-4o-mini",
+            temperature=0.65,
+            max_tokens=140,
+            messages=messages,
+        )
+        reply = resp.choices[0].message.content.strip()
         print("AURORA REPLY >>>", reply)
 
-        # Update memory (append new user + assistant messages)
-        CONVERSATION_HISTORY.append({"role": "user", "content": user_text})
-        CONVERSATION_HISTORY.append({"role": "assistant", "content": reply})
-
+        add_to_context("assistant", reply)
         return reply
 
     except Exception as e:
         print("GPT ERROR:", repr(e))
-        return "I’m here with you. Let’s give that another gentle try."
+        return "I’m still here with you, just having a small technical issue. Let’s try that again in a moment."
 
+
+# -------------------------------------------------------------------
+# 5. Public helper for route
+# -------------------------------------------------------------------
+def aurora_whisper_reply(user_text: str) -> str:
+    return aurora_brain_reply(user_text)
 
 
 """""""""
