@@ -1,5 +1,4 @@
 # backend/services/hf_emotion.py
-# backend/services/hf_emotion.py
 
 import os
 import requests

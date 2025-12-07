@@ -1,7 +1,7 @@
 # backend/app.py
 
 from dotenv import load_dotenv
-load_dotenv()   # ✅ MUST BE FIRST
+load_dotenv()   # MUST BE FIRST
 
 import os
 import sys
@@ -12,22 +12,20 @@ from flask_migrate import Migrate
 # Ensure imports work when running from root
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-# ✅ Now it's safe to import anything that uses os.getenv()
-
 # Extensions
 from extensions import db, jwt
 
 # Models (needed for migrations)
 from users.models import User, EmotionalProfile, FaceEmbedding
 
-# User routes
+# User/Auth routes
 from users.routes import user_bp
 from users.oauth import oauth_bp
-from routes.aurora_routes import aurora_bp
-from routes.whisper_routes import whisper_bp
 
-# AI / Emotion routes
-from routes.emotion_routes import emotion_bp
+# Aurora + Emotion
+from routes.aurora_routes import aurora_bp
+from routes.emotion_routes import emotion_bp   # Keep
+from routes.whisper_routes import whisper_bp
 
 # Migration manager
 migrate = Migrate()
@@ -47,12 +45,11 @@ def create_app():
     ]
 
     CORS(
-    app,
-    resources={r"/api/*": {"origins": "*"}},
-    methods=["GET", "POST", "OPTIONS"],
-    allow_headers=["Content-Type", "Authorization"],
+        app,
+        resources={r"/api/*": {"origins": "*"}},
+        methods=["GET", "POST", "OPTIONS"],
+        allow_headers=["Content-Type", "Authorization"],
     )
-
 
     # ----------------------------------------------------
     # Flask Config
@@ -79,8 +76,8 @@ def create_app():
     app.register_blueprint(user_bp)      # /api/users/*
     app.register_blueprint(oauth_bp)     # /auth/*
     app.register_blueprint(emotion_bp)   # /api/emotion/*
-    app.register_blueprint(aurora_bp)
-    app.register_blueprint(whisper_bp)
+    app.register_blueprint(aurora_bp)    # /api/aurora/*
+    app.register_blueprint(whisper_bp)   # /api/whisper/*   <-- FIXED
 
     # ----------------------------------------------------
     # Health Check
@@ -95,7 +92,7 @@ def create_app():
 if __name__ == "__main__":
     application = create_app()
     application.run(debug=True, host="0.0.0.0", port=5000)
-    
+
 
 
 """"""""""
