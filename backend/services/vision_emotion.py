@@ -1,18 +1,31 @@
 # backend/services/vision_emotion.py
+# backend/services/vision_emotion.py
 
 import os
+import io
 import base64
 import json
 import time
 from typing import Dict, Any
 from collections import deque
 
+import cv2
+import numpy as np
+from PIL import Image
 from openai import OpenAI
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-# Rolling smoothing buffer for confidence
+# Rolling confidence history for smoothing
 _conf_history = deque(maxlen=5)
+
+# Optional: last good result for rate-limit fallback
+_last_good_result: Dict[str, Any] | None = None
+
+# OpenCV Haar Cascade (face detector)
+FACE_CASCADE = cv2.CascadeClassifier(
+    cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
+)
 
 
 class EmotionServiceError(Exception):
@@ -20,7 +33,7 @@ class EmotionServiceError(Exception):
     pass
 
 
-def _clamp01(value, default=0.5) -> float:
+def _clamp01(value, default: float = 0.5) -> float:
     try:
         v = float(value)
     except (TypeError, ValueError):
@@ -34,45 +47,93 @@ def _smooth_conf(value: float) -> float:
     """
     _conf_history.append(value)
     avg = sum(_conf_history) / len(_conf_history)
-    return (avg + value) / 2
+    # Blend current value with rolling average
+    return (avg + value) / 2.0
 
 
+# -------------------------------------------------------------
+# FACE CROP
+# -------------------------------------------------------------
+def _extract_face(image_bytes: bytes) -> bytes:
+    """
+    Try to detect a single face and crop around it.
+    If detection fails, return the original image bytes.
+    """
+    # PIL → numpy
+    img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+    img_np = np.array(img)
+
+    # Gray for detector
+    gray = cv2.cvtColor(img_np, cv2.COLOR_RGB2GRAY)
+
+    faces = FACE_CASCADE.detectMultiScale(
+        gray,
+        scaleFactor=1.1,
+        minNeighbors=5,
+        minSize=(80, 80),
+    )
+
+    if len(faces) == 0:
+        print("⚠️ No face detected → using full frame")
+        return image_bytes  # fallback to whole image
+
+    # Take the first face
+    x, y, w, h = faces[0]
+    face_crop = img_np[y : y + h, x : x + w]
+
+    # Back to JPEG bytes
+    face_img = Image.fromarray(face_crop)
+    buf = io.BytesIO()
+    face_img.save(buf, format="JPEG", quality=90)
+    return buf.getvalue()
+
+
+# -------------------------------------------------------------
+# MAIN EMOTION ANALYZER (WITH FACE CROP + RATE LIMIT HANDLING)
+# -------------------------------------------------------------
 def analyze_emotion(image_bytes: bytes) -> Dict[str, Any]:
     """
     Uses OpenAI GPT-4o-mini Vision to analyze facial emotion.
 
-    Improvements:
-    - Uses strict JSON.
-    - Filters out low-confidence emotions.
-    - Smooths noisy outputs.
-    - Avoids excessive "uncertain".
-    - Designed for webcam or avatar face input.
+    - Crops to face first (when possible).
+    - Smooths confidence.
+    - Falls back to last good result when rate-limited.
     """
+    global _last_good_result
+
     if not image_bytes:
         raise EmotionServiceError("Empty image")
 
-    # Encode as base64
+    # Try face crop first
+    try:
+        image_bytes = _extract_face(image_bytes)
+    except Exception as e:
+        print("⚠️ Face crop failed:", e)
+
+    # Encode as base64 data URL
     b64 = base64.b64encode(image_bytes).decode("utf-8")
     data_url = f"data:image/jpeg;base64,{b64}"
 
     system_prompt = """
-You are an emotion recognition module for Aurora, a real-time supportive AI companion.
+You are an emotion recognition module for Aurora.
 
-Requirements:
-- Assume a single visible face (human or animated avatar).
-- Classify emotion as ONE of:
-  ["happy","sad","angry","fearful","surprised",
-   "disgusted","tired","stressed","confused",
-   "neutral","uncertain"]
-- Use "uncertain" ONLY if the face is hidden, extremely blurry, or not detectable.
-- If the face looks neutral or relaxed: choose "neutral" (not uncertain).
-- Output JSON ONLY with:
-  { "emotion", "confidence", "valence", "arousal", "dominance" }.
+Return ONE of:
+["happy","sad","angry","fearful","surprised","disgusted",
+ "tired","stressed","confused","neutral","uncertain"]
 
-Guidelines:
-- High valence for happy; low valence for sad/stressed.
-- High arousal for anger/fear; low arousal for tired.
-- Confidence should reflect clarity of the expression.
+Rules:
+- Assume there is a single visible face (human or animated avatar).
+- Use "uncertain" ONLY if the FACE is hidden, extremely blurry, or not detectable.
+- If the face looks neutral/relaxed, choose "neutral" (NOT "uncertain").
+
+Output STRICT JSON:
+{
+  "emotion": "...",
+  "confidence": 0-1,
+  "valence": 0-1,
+  "arousal": 0-1,
+  "dominance": 0-1
+}
 """
 
     messages = [
@@ -80,7 +141,10 @@ Guidelines:
         {
             "role": "user",
             "content": [
-                {"type": "text", "text": "Analyze the face and return ONLY the JSON object."},
+                {
+                    "type": "text",
+                    "text": "Analyze the face and return ONLY the JSON object."
+                },
                 {"type": "image_url", "image_url": {"url": data_url}},
             ],
         },
@@ -92,56 +156,59 @@ Guidelines:
         try:
             resp = client.chat.completions.create(
                 model="gpt-4o-mini",
-                response_format={"type": "json_object"},
                 messages=messages,
+                response_format={"type": "json_object"},
                 temperature=0.0,
-                max_tokens=200,
+                max_tokens=150,
             )
 
             content = resp.choices[0].message.content
-            try:
-                parsed = json.loads(content)
-            except Exception:
-                raise EmotionServiceError(f"Invalid JSON returned: {content}")
+            parsed = json.loads(content)
 
             normalized = _normalize_output(parsed)
+            _last_good_result = normalized
             return normalized
 
         except Exception as e:
-            print("Vision emotion model error:", repr(e))
             err = str(e).lower()
+            print("Vision emotion error:", repr(e))
 
-            # Retry on rate limit
-            if "429" in err or "rate" in err:
+            # Rate limit: use last_good_result if we have one
+            if "429" in err or "rate_limit" in err:
+                if _last_good_result is not None:
+                    print("⚠️ Vision rate-limited — using cached emotion")
+                    return _last_good_result
                 time.sleep(0.4 * (attempt + 1))
                 continue
 
-            # Fail permanently if not a retryable error
+            # Non-retryable error → break out
             break
 
     # Hard fallback
-    return {
-        "emotion": "uncertain",
-        "confidence": 0.1,
-        "score": 0.1,
+    fallback = _last_good_result or {
+        "emotion": "neutral",
+        "confidence": 0.15,
+        "score": 0.15,
         "valence": 0.5,
         "arousal": 0.5,
         "dominance": 0.5,
         "raw": {"error": "vision_failed_or_rate_limited"},
     }
+    print("⚠️ Using hard fallback emotion:", fallback)
+    return fallback
 
 
 def _normalize_output(parsed: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Final cleanup phase:
-    - Filters low confidence → returns neutral
-    - Smooths confidence
-    - Ensures stable output for Aurora
+    Final cleanup:
+    - Clamp values into [0,1]
+    - Filter very low confidence → neutral
+    - Smooth confidence so HUD doesn’t jump
     """
-    emotion = (parsed.get("emotion") or "uncertain").lower().strip()
+    emotion = (parsed.get("emotion") or "neutral").lower().strip()
     raw_conf = _clamp01(parsed.get("confidence"), default=0.5)
 
-    # Weak confidence? Do NOT trust the emotion.
+    # If confidence is weak, treat as neutral
     if raw_conf < 0.40:
         emotion = "neutral"
 
@@ -157,6 +224,5 @@ def _normalize_output(parsed: Dict[str, Any]) -> Dict[str, Any]:
         "raw": parsed,
     }
 
-    print("VISION EMOTION RESULT >>>", result)
+    print("✅ VISION EMOTION >>>", result)
     return result
-
