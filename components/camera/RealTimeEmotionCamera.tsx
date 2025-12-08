@@ -1,21 +1,28 @@
 // components/camera/RealTimeEmotionCamera.tsx
+// components/camera/RealTimeEmotionCamera.tsx
 "use client";
 
 import { useEffect, useRef, useState } from "react";
 
+interface EmotionPayload {
+  emotion: string;
+  confidence: number;
+  valence: number;
+  arousal: number;
+  dominance: number;
+  [key: string]: any;
+}
+
 interface Props {
-  onEmotion?: (data: any) => void;
+  onEmotion?: (data: EmotionPayload) => void;
 }
 
 export default function RealTimeEmotionCamera({ onEmotion }: Props) {
-
   // -------------------------------------------------------------
   // REFS
   // -------------------------------------------------------------
   const videoRef = useRef<HTMLVideoElement>(null);
   const fullVideoRef = useRef<HTMLVideoElement>(null);
-
-  // Fix interval type for Next.js environments
   const emotionIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const conversationActiveRef = useRef(false);
@@ -23,23 +30,34 @@ export default function RealTimeEmotionCamera({ onEmotion }: Props) {
   const isAuroraSpeakingRef = useRef(false);
 
   // -------------------------------------------------------------
-  // UI
+  // UI STATE
   // -------------------------------------------------------------
   const [streaming, setStreaming] = useState(false);
   const [showFullscreen, setShowFullscreen] = useState(false);
-  const [emotionResult, setEmotionResult] = useState<any | null>(null);
+  const [emotionResult, setEmotionResult] = useState<EmotionPayload | null>(
+    null
+  );
   const [isListening, setIsListening] = useState(false);
 
   const [guestName, setGuestName] = useState("");
   const [nameCaptured, setNameCaptured] = useState(false);
 
+  // HF errors
   const [hfErrorOnce, setHfErrorOnce] = useState(false);
 
+  // ✅ last good emotion (front-end safety)
+  const lastGoodEmotionRef = useRef<EmotionPayload>({
+    emotion: "neutral",
+    confidence: 0.5,
+    valence: 0.5,
+    arousal: 0.5,
+    dominance: 0.5,
+  });
+
   // Smoothing buffer
-  const smoothBufferRef = useRef<any[]>([]);
+  const smoothBufferRef = useRef<EmotionPayload[]>([]);
   const SMOOTH_WINDOW = 10;
 
-  // Unlock audio (required on iOS / some browsers)
   const unlockAudio = () => {
     const a = new Audio();
     a.play().catch(() => {});
@@ -91,16 +109,16 @@ export default function RealTimeEmotionCamera({ onEmotion }: Props) {
     isAuroraSpeakingRef.current = false;
   };
 
-  useEffect(() => stopAll, []);
+  useEffect(() => {
+    return () => stopAll();
+  }, []);
 
   // -------------------------------------------------------------
-  // EMOTION POLLING
+  // EMOTION POLLING (HF GPU endpoint)
   // -------------------------------------------------------------
   const startEmotionPolling = () => {
     stopEmotionPolling();
-
     emotionIntervalRef.current = setInterval(() => {
-      // Don't analyze while Aurora is talking
       if (!isAuroraSpeakingRef.current) {
         captureFrame();
       }
@@ -114,9 +132,8 @@ export default function RealTimeEmotionCamera({ onEmotion }: Props) {
     }
   };
 
-  // Smoothing fix: smooth confidence too
-  const smoothEmotion = (data: any) => {
-    const entry = {
+  const smoothEmotion = (data: EmotionPayload): EmotionPayload => {
+    const entry: EmotionPayload = {
       emotion: data.emotion,
       confidence: data.confidence,
       valence: data.valence,
@@ -125,13 +142,14 @@ export default function RealTimeEmotionCamera({ onEmotion }: Props) {
     };
 
     smoothBufferRef.current.push(entry);
-    if (smoothBufferRef.current.length > SMOOTH_WINDOW)
+    if (smoothBufferRef.current.length > SMOOTH_WINDOW) {
       smoothBufferRef.current.shift();
+    }
 
     const buf = smoothBufferRef.current;
 
     const avg = (k: "valence" | "arousal" | "dominance" | "confidence") =>
-      buf.reduce((a, b) => a + b[k], 0) / buf.length;
+      buf.reduce((a, b) => a + (b[k] ?? 0), 0) / buf.length;
 
     const counts: Record<string, number> = {};
     for (const e of buf) {
@@ -148,7 +166,6 @@ export default function RealTimeEmotionCamera({ onEmotion }: Props) {
     };
   };
 
-  // Capture frame → send to /emotion/analyze
   const captureFrame = async () => {
     if (!videoRef.current) return;
 
@@ -178,23 +195,27 @@ export default function RealTimeEmotionCamera({ onEmotion }: Props) {
 
       if (!res.ok) {
         if (!hfErrorOnce) {
-          console.error("Emotion analyze error:", await res.text());
+          console.error("HF emotion error:", await res.text());
           setHfErrorOnce(true);
         }
         return;
       }
 
-      const raw = await res.json();
-      console.log("Emotion raw result:", raw);
+      const raw = (await res.json()) as EmotionPayload;
+      if (!raw || !raw.emotion) return;
+
+      lastGoodEmotionRef.current = raw;
 
       const smooth = smoothEmotion(raw);
       setEmotionResult(smooth);
       onEmotion?.(smooth);
     } catch (err) {
       if (!hfErrorOnce) {
-        console.error("Emotion error:", err);
+        console.error("HF emotion fetch error:", err);
         setHfErrorOnce(true);
       }
+      // fallback to last good
+      setEmotionResult(lastGoodEmotionRef.current);
     }
   };
 
@@ -208,7 +229,6 @@ export default function RealTimeEmotionCamera({ onEmotion }: Props) {
 
       const blob = await res.blob();
       const audio = new Audio(URL.createObjectURL(blob));
-
       currentAuroraAudioRef.current = audio;
       isAuroraSpeakingRef.current = true;
 
@@ -224,35 +244,22 @@ export default function RealTimeEmotionCamera({ onEmotion }: Props) {
   };
 
   // -------------------------------------------------------------
-  // NAME CAPTURE (fixed)
+  // NAME CAPTURE (same behavior, just no emotion logic here)
   // -------------------------------------------------------------
   const startNameCapture = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: true,
-      });
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
       let chunks: Blob[] = [];
-      const rec = new MediaRecorder(stream, {
-        mimeType: MediaRecorder.isTypeSupported("audio/webm")
-          ? "audio/webm"
-          : "",
-      });
+      const rec = new MediaRecorder(stream);
 
-      rec.onstart = () => {
-        setIsListening(true);
-        console.log("🎙️ Name capture started");
-      };
-
-      rec.ondataavailable = (e) => {
-        if (e.data && e.data.size > 0) chunks.push(e.data);
-      };
+      rec.onstart = () => setIsListening(true);
+      rec.ondataavailable = (e) => e.data.size && chunks.push(e.data);
 
       rec.onstop = async () => {
         setIsListening(false);
 
         const blob = new Blob(chunks, { type: "audio/webm" });
-        console.log("Name blob size:", blob.size);
 
         try {
           const fd = new FormData();
@@ -264,23 +271,16 @@ export default function RealTimeEmotionCamera({ onEmotion }: Props) {
           );
 
           const data = await res.json();
-          const raw = (data.text || "").trim();
-          console.log("Raw name transcription:", raw);
-
-          let first = raw
-            .replace(/^(my name is|i am|i'm|it's)\b/i, "")
-            .replace(/[^a-zA-Z ]/g, "")
+          let first = (data.text || "")
+            .replace(/^(my name is|i am|i'm|it's)/i, "")
+            .replace(/[^a-zA-Z]/g, "")
             .trim()
-            .split(/\s+/)[0]
-            ?.toLowerCase();
+            .toLowerCase();
 
           if (!first || first.length < 2) first = "friend";
 
           setGuestName(first);
           setNameCaptured(true);
-          console.log("✅ Name captured:", first);
-        } catch (err) {
-          console.error("Name capture process error:", err);
         } finally {
           stream.getTracks().forEach((t) => t.stop());
         }
@@ -290,7 +290,7 @@ export default function RealTimeEmotionCamera({ onEmotion }: Props) {
       };
 
       rec.start();
-      setTimeout(() => rec.state !== "inactive" && rec.stop(), 2300);
+      setTimeout(() => rec.stop(), 2300);
     } catch (err) {
       console.error("Name capture error:", err);
     }
@@ -301,9 +301,7 @@ export default function RealTimeEmotionCamera({ onEmotion }: Props) {
   // -------------------------------------------------------------
   const startAutoConversationLoop = () => {
     if (conversationActiveRef.current) return;
-
     conversationActiveRef.current = true;
-    console.log("🌀 Auto conversation loop STARTED");
     scheduleNextTurn();
   };
 
@@ -321,46 +319,28 @@ export default function RealTimeEmotionCamera({ onEmotion }: Props) {
   const recordVoiceTurn = async () => {
     if (!conversationActiveRef.current) return;
 
-    console.log("🎧 Recording user turn…");
-
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: true,
-      });
-
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       let chunks: Blob[] = [];
-      const rec = new MediaRecorder(stream, {
-        mimeType: MediaRecorder.isTypeSupported("audio/webm")
-          ? "audio/webm"
-          : "",
-      });
 
+      const rec = new MediaRecorder(stream);
       rec.onstart = () => setIsListening(true);
-
-      rec.ondataavailable = (e) => {
-        if (e.data && e.data.size > 0) chunks.push(e.data);
-      };
+      rec.ondataavailable = (e) => e.data.size && chunks.push(e.data);
 
       rec.onstop = async () => {
         setIsListening(false);
-
         const blob = new Blob(chunks, { type: "audio/webm" });
-        console.log("🎙️ Turn blob size:", blob.size);
 
-        try {
-          if (blob.size > 1500) {
-            await sendToAurora(blob);
-          }
-        } catch (err) {
-          console.error("Recording error:", err);
-        } finally {
-          stream.getTracks().forEach((t) => t.stop());
-          scheduleNextTurn();
+        if (blob.size > 1500) {
+          await sendToAurora(blob);
         }
+
+        stream.getTracks().forEach((t) => t.stop());
+        scheduleNextTurn();
       };
 
       rec.start();
-      setTimeout(() => rec.state !== "inactive" && rec.stop(), 5000);
+      setTimeout(() => rec.stop(), 5000);
     } catch (err) {
       console.error("Mic error:", err);
       setTimeout(scheduleNextTurn, 1500);
@@ -368,19 +348,19 @@ export default function RealTimeEmotionCamera({ onEmotion }: Props) {
   };
 
   // -------------------------------------------------------------
-  // SEND SPEECH → AURORA
+  // SEND TO AURORA (now fed by HF emotion)
   // -------------------------------------------------------------
   const sendToAurora = async (blob: Blob) => {
-    console.log("⬆️ Sending speech to Aurora…");
-
     const fd = new FormData();
     fd.append("audio", blob, "speech.webm");
     fd.append("user_name", guestName || "friend");
 
-    fd.append("face_emotion", emotionResult?.emotion || "neutral");
-    fd.append("valence", String(emotionResult?.valence ?? 0.5));
-    fd.append("arousal", String(emotionResult?.arousal ?? 0.5));
-    fd.append("dominance", String(emotionResult?.dominance ?? 0.5));
+    const safeEmotion = emotionResult || lastGoodEmotionRef.current;
+
+    fd.append("face_emotion", safeEmotion.emotion);
+    fd.append("valence", String(safeEmotion.valence));
+    fd.append("arousal", String(safeEmotion.arousal));
+    fd.append("dominance", String(safeEmotion.dominance));
 
     const res = await fetch("http://localhost:5000/api/aurora/converse", {
       method: "POST",
@@ -393,12 +373,6 @@ export default function RealTimeEmotionCamera({ onEmotion }: Props) {
     }
 
     const outBlob = await res.blob();
-
-    if (currentAuroraAudioRef.current) {
-      currentAuroraAudioRef.current.pause();
-      currentAuroraAudioRef.current = null;
-    }
-
     const audio = new Audio(URL.createObjectURL(outBlob));
     currentAuroraAudioRef.current = audio;
     isAuroraSpeakingRef.current = true;
@@ -460,7 +434,7 @@ export default function RealTimeEmotionCamera({ onEmotion }: Props) {
             </div>
           )}
 
-          {/* — HUD — */}
+          {/* HUD */}
           {streaming && (
             <div
               className="position-absolute start-0 bottom-0 m-3 p-3 rounded-3"
@@ -473,7 +447,7 @@ export default function RealTimeEmotionCamera({ onEmotion }: Props) {
               <div>
                 Emotion:{" "}
                 <strong>{dominantEmotion || "Detecting…"}</strong>{" "}
-                {confidence !== undefined && (
+                {typeof confidence === "number" && (
                   <span className="text-info ms-1">
                     {(confidence * 100).toFixed(0)}%
                   </span>
@@ -525,7 +499,7 @@ export default function RealTimeEmotionCamera({ onEmotion }: Props) {
         )}
       </div>
 
-      {/* — FULLSCREEN MODAL — */}
+      {/* FULLSCREEN MODAL */}
       {showFullscreen && (
         <div
           className="modal fade show"
@@ -554,9 +528,6 @@ export default function RealTimeEmotionCamera({ onEmotion }: Props) {
     </>
   );
 }
-
-
-
 
 
 

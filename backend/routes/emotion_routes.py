@@ -1,7 +1,8 @@
 # backend/routes/emotion_routes.py
+# backend/routes/emotion_routes.py
 
 from flask import Blueprint, request, jsonify
-from services.vision_emotion import analyze_emotion, EmotionServiceError
+from services.hf_emotion import analyze_emotion, EmotionServiceError
 
 emotion_bp = Blueprint("emotion", __name__, url_prefix="/api/emotion")
 
@@ -16,11 +17,8 @@ def allowed_file(filename: str) -> bool:
 def analyze():
     """
     Accepts multipart/form-data with field "image"
-    Calls vision_emotion.analyze_emotion()
+    Calls HF GPU emotion service (hf_emotion.analyze_emotion)
     """
-    # -------------------------
-    # Validate presence of file
-    # -------------------------
     if "image" not in request.files:
         return jsonify({"error": "image file required"}), 400
 
@@ -33,28 +31,20 @@ def analyze():
         return jsonify({"error": "invalid file type"}), 400
 
     try:
-        # -------------------------
-        # Read bytes
-        # -------------------------
         image_bytes = file.read()
 
-        if not image_bytes or len(image_bytes) < 20:  # prevents empty/invalid frames
-            return jsonify({"error": "empty or invalid image data"}), 400
+        if not image_bytes:
+            return jsonify({"error": "empty image data"}), 400
 
-        # -------------------------
-        # Run Vision Emotion AI
-        # -------------------------
         result = analyze_emotion(image_bytes)
-
-        # Always respond with JSON for frontend HUD
+        # result already has emotion, confidence, valence, arousal, dominance
         return jsonify(result), 200
 
     except EmotionServiceError as e:
-        # Custom error from emotion service (bad image, invalid JSON from model, etc.)
-        return jsonify({"error": str(e)}), 500
+        print("HF EmotionServiceError:", repr(e))
+        return jsonify({"error": str(e)}), 502
 
     except Exception as e:
-        # General catch-all for debugging
         print("Emotion analyze route error:", repr(e))
         return jsonify({"error": "internal emotion service error"}), 500
 

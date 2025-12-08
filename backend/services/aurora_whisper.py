@@ -1,9 +1,7 @@
 # backend/services/aurora_whisper.py
-# backend/services/aurora_whisper.py
-
 import os
 import io
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
 from openai import OpenAI
 
 from services.datetime_context import get_time_context
@@ -11,42 +9,52 @@ from services.datetime_context import get_time_context
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 # -------------------------------------------------------------------
-# 1. SIMPLE IN-MEMORY CONTEXT (last 2 turns)
+# 1. SHORT-TERM MEMORY + NAME LOCK
 # -------------------------------------------------------------------
 
 CONTEXT_BUFFER: List[Dict[str, str]] = []
-MAX_TURNS = 2  # number of user+assistant pairs to keep
+MAX_TURNS = 3
+
+LOCKED_USER_NAME: str | None = None   # ✅ Name lock lives here
 
 
-def add_to_context(role: str, content: str) -> None:
-    """Append a turn to short-term memory."""
+def lock_name_if_valid(name: str):
+    global LOCKED_USER_NAME
+    if not LOCKED_USER_NAME and name:
+        nm = name.strip().split(" ")[0].lower()
+        if len(nm) >= 2 and nm not in ["friend", "guest", "unknown", "my", "the"]:
+            LOCKED_USER_NAME = nm
+            print("✅ NAME LOCKED:", LOCKED_USER_NAME)
+
+
+def get_locked_name() -> str:
+    return LOCKED_USER_NAME or ""
+
+
+def add_to_context(role: str, content: str):
     if not content:
         return
 
     CONTEXT_BUFFER.append({"role": role, "content": content})
-
     while len(CONTEXT_BUFFER) > MAX_TURNS * 2:
         CONTEXT_BUFFER.pop(0)
 
 
-def get_recent_context() -> List[Dict[str, str]]:
-    """Return the recent conversation context (user + assistant only)."""
+def get_recent_context():
     return [
-        turn
-        for turn in CONTEXT_BUFFER[-MAX_TURNS * 2 :]
+        turn for turn in CONTEXT_BUFFER[-MAX_TURNS * 2:]
         if turn["role"] in ("user", "assistant")
     ]
 
 
 # -------------------------------------------------------------------
-# 2. SPEECH → TEXT (Whisper)
+# 2. WHISPER STT (FALSE POSITIVE FIX)
 # -------------------------------------------------------------------
 
 def speech_to_text(audio_bytes: bytes) -> str:
     print("DEBUG — incoming audio size:", len(audio_bytes))
 
-    if not audio_bytes or len(audio_bytes) < 2000:
-        print("Whisper STT Error: Audio too short or empty")
+    if not audio_bytes or len(audio_bytes) < 4000:
         return ""
 
     try:
@@ -61,6 +69,11 @@ def speech_to_text(audio_bytes: bytes) -> str:
 
         text = (transcript.text or "").strip()
         print("DEBUG — Whisper text:", text)
+
+        # ✅ FIX: ignore junk/noise output
+        if not text or len(text) < 2:
+            return ""
+
         return text
 
     except Exception as e:
@@ -69,148 +82,77 @@ def speech_to_text(audio_bytes: bytes) -> str:
 
 
 # -------------------------------------------------------------------
-# 3. GPT REPLY — Aurora Brain with VISION EMOTION CONTEXT
+# 3. AURORA BRAIN — VISION EMOTION + NAME LOCK + NO SELF-INTRO EVER
 # -------------------------------------------------------------------
 
 def aurora_brain_reply(
     user_text: str,
     user_name: str = "",
-    face_emotion: Optional[str] = None,
-    face_valence: Optional[float] = None,
-    face_arousal: Optional[float] = None,
-    face_dominance: Optional[float] = None,
+    face_emotion: str = "",
+    valence: float = 0.5,
+    arousal: float = 0.5,
+    dominance: float = 0.5,
 ) -> str:
-    """
-    Generate Aurora's therapist-like reply, using:
-      - user_text (from Whisper)
-      - optional face emotion context from the camera
-    """
-
-    print(">>> NEW AURORA BRAIN ACTIVE (VISION EMOTION) <<<")
 
     if not user_text:
-        return "I didn’t quite catch that. Could you try saying it once more?"
+        return "I didn’t quite catch that. Could you say it again?"
 
-    # Check if this is basically the first turn (no previous context)
-    is_first_turn = len(get_recent_context()) == 0
+    # ✅ NAME LOCK
+    if user_name:
+        lock_name_if_valid(user_name)
+
+    locked_name = get_locked_name()
 
     add_to_context("user", user_text)
 
-    # Safely normalize emotion inputs
-    face_emotion = (face_emotion or "").lower().strip()
-    if face_emotion not in [
-        "happy",
-        "sad",
-        "angry",
-        "fearful",
-        "surprised",
-        "disgusted",
-        "tired",
-        "stressed",
-        "confused",
-        "neutral",
-        "uncertain",
-    ]:
-        face_emotion = "neutral" if face_emotion else "neutral"
+    # ✅ INTERNAL EMOTIONAL MODULATION FROM VISION
+    emotional_style = "neutral"
 
-    def clamp01(x: Optional[float], default: float) -> float:
-        try:
-            if x is None:
-                return default
-            return max(0.0, min(1.0, float(x)))
-        except (TypeError, ValueError):
-            return default
+    if valence < 0.3:
+        emotional_style = "very_soft"
+    elif valence < 0.5:
+        emotional_style = "soft"
+    elif valence > 0.75:
+        emotional_style = "warm"
 
-    valence = clamp01(face_valence, default=0.5)
-    arousal = clamp01(face_arousal, default=0.4)
-    dominance = clamp01(face_dominance, default=0.5)
+    if arousal > 0.75:
+        emotional_style += "_grounding"
 
-    # Time (internal only, not spoken)
-    t = get_time_context()
-    tod = t["time_of_day"]
-    clock = t["full_time"]
-
-    # Clean optional name
-    sanitized_name = ""
-    if user_name:
-        nm = user_name.strip().split(" ")[0]
-        if nm and nm.lower() not in ["unknown", "guest", "friend"]:
-            sanitized_name = nm
-
-    # Map vision emotion + valence/arousal to an internal "tone style"
-    tone = "neutral"
-
-    if face_emotion in ["sad", "tired", "stressed"]:
-        if valence < 0.4:
-            tone = "very_soft"
-    elif face_emotion in ["happy"]:
-        if valence > 0.6:
-            tone = "warm"
-    elif face_emotion in ["angry", "fearful", "confused"]:
-        tone = "soft_grounding"
-
-    # arousal modulation
-    if arousal > 0.7:
-        if tone == "neutral":
-            tone = "grounding"
-        elif "soft" in tone:
-            tone = tone + "_grounding"
-
-    # Extra guard: if this is basically an intro / first turn and user just says their name,
-    # do NOT comment on emotion yet.
-    user_text_lower = user_text.lower()
-    intro_like = (
-        "my name is" in user_text_lower
-        or user_text_lower.strip() in ["my name is", "it's me", "it's", "i'm"]
-        or len(user_text.split()) <= 3
-    )
-
-    # Build internal emotion summary (NOT spoken, only used in instructions)
-    internal_emotion_desc = (
-        f"vision_emotion={face_emotion}, "
-        f"valence={valence:.2f}, arousal={arousal:.2f}, dominance={dominance:.2f}"
-    )
-
+    # ✅ SYSTEM PROMPT — HARD RULES
     system_prompt = f"""
-You are Aurora — a warm, grounded, therapist-like companion.
-You respond in a natural human voice using 1–2 short sentences.
+You are Aurora — a calm, emotionally grounded therapist-like companion.
 
-ABSOLUTE RULES:
+ABSOLUTE NON-NEGOTIABLE RULES:
 • Never introduce yourself.
-• Never say your own name.
-• Never explain how you work or mention cameras, screens, or detection.
-• Never mention, name, or analyze the user's emotions or facial expression
-  unless the user explicitly talks about how they feel.
-• Never reference valence, arousal, state, or any metadata.
-• Never comment that they “sound happy” or similar based only on a brief introduction.
-• Never guess or invent a name.
+• Never say your name.
+• Never explain who you are.
+• Never analyze emotions out loud.
+• Never mention emotion labels.
+• Never mention time, camera, system, or environment.
+• Never repeat the greeting behavior.
+• Never guess names.
 
-WHEN USER ONLY INTRODUCES THEMSELVES (like “my name is ...” or very short intros)
-AND this is at the very start of the conversation:
-• Do NOT comment on how they feel.
-• Just acknowledge their name politely and invite them to share what’s on their mind.
+STYLE RULES:
+• 1–2 short natural sentences.
+• Calm, validating, grounded.
+• Ask at most one gentle question.
+• If a name exists ("{locked_name}"), you may use it occasionally, never every reply.
 
-CONSISTENT STYLE:
-• Be calm, validating, and present.
-• Respond directly to what the user just said.
-• Use simple, human language (no clinical jargon).
-• Ask at most one gentle, open-ended question.
-• If a name (“{sanitized_name}”) is provided, you may use it occasionally and naturally, not in every reply.
-
-INTERNAL ONLY — DO NOT SAY THIS OUT LOUD:
-• Visual emotion context: {internal_emotion_desc}
-• Time: {clock} ({tod})
-• Internal tone style: {tone}
-• is_first_turn={is_first_turn}, intro_like={intro_like}
+INTERNAL ONLY (DO NOT SAY):
+• Face emotion: {face_emotion}
+• valence={valence:.2f}
+• arousal={arousal:.2f}
+• dominance={dominance:.2f}
+• style={emotional_style}
 """.strip()
 
-    messages: List[Dict[str, str]] = [{"role": "system", "content": system_prompt}]
+    messages = [{"role": "system", "content": system_prompt}]
     messages.extend(get_recent_context())
 
     try:
         resp = client.chat.completions.create(
             model="gpt-4o-mini",
-            temperature=0.65,
+            temperature=0.6,
             max_tokens=120,
             messages=messages,
         )
@@ -223,32 +165,29 @@ INTERNAL ONLY — DO NOT SAY THIS OUT LOUD:
 
     except Exception as e:
         print("GPT ERROR:", repr(e))
-        return (
-            "I'm still here with you — we can try that again in a moment if you’d like."
-        )
+        return "I'm here with you. We can try again."
 
 
 # -------------------------------------------------------------------
-# 4. Public wrapper
+# 4. PUBLIC WRAPPER
 # -------------------------------------------------------------------
 
 def aurora_whisper_reply(
     user_text: str,
     user_name: str = "",
-    face_emotion: Optional[str] = None,
-    face_valence: Optional[float] = None,
-    face_arousal: Optional[float] = None,
-    face_dominance: Optional[float] = None,
+    face_emotion: str = "",
+    valence: float = 0.5,
+    arousal: float = 0.5,
+    dominance: float = 0.5,
 ) -> str:
     return aurora_brain_reply(
         user_text=user_text,
         user_name=user_name,
         face_emotion=face_emotion,
-        face_valence=face_valence,
-        face_arousal=face_arousal,
-        face_dominance=face_dominance,
+        valence=valence,
+        arousal=arousal,
+        dominance=dominance,
     )
-
 
 
 """""""""

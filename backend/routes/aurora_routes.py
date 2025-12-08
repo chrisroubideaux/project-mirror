@@ -77,7 +77,6 @@ def aurora_greet():
 
     return safe_tts(text, filename="aurora_greet.mp3")
 
-
 # ------------------------------------------------------
 # /converse (main voice loop)
 # ------------------------------------------------------
@@ -107,7 +106,7 @@ def aurora_converse():
     arousal_raw = request.form.get("arousal")
     dominance_raw = request.form.get("dominance")
 
-    def to_float(v, default=None):
+    def to_float(v, default=0.5):
         if v is None:
             return default
         try:
@@ -115,12 +114,12 @@ def aurora_converse():
         except (TypeError, ValueError):
             return default
 
-    face_valence = to_float(valence_raw, default=None)
-    face_arousal = to_float(arousal_raw, default=None)
-    face_dominance = to_float(dominance_raw, default=None)
+    face_valence = to_float(valence_raw, default=0.5)
+    face_arousal = to_float(arousal_raw, default=0.5)
+    face_dominance = to_float(dominance_raw, default=0.5)
 
     # -------------------------
-    # Speech → text (with fallback)
+    # Speech → text
     # -------------------------
     try:
         user_text = speech_to_text(audio_bytes)
@@ -128,14 +127,12 @@ def aurora_converse():
         print("Whisper error:", e)
         user_text = None
 
+    # ✅ FIX: Do NOT spam long retry message
     if not user_text:
-        text = (
-            "I didn’t quite catch that. Maybe try a bit closer to the microphone, "
-            "or speak just a little louder."
-        )
-        return safe_tts(text, filename="aurora_retry.mp3")
+        return safe_tts("Go ahead — I’m listening.", filename="aurora_retry.mp3")
 
     print("AURORA USER TEXT >>>", user_text)
+
     if face_emotion:
         print(
             "AURORA FACE CONTEXT >>>",
@@ -156,14 +153,14 @@ def aurora_converse():
 
     for attempt in range(MAX_RETRIES):
         try:
-            # Pass vision emotion into Aurora's brain.
+            # ✅ UPDATED to match the new aurora_whisper_reply signature
             reply_text = aurora_whisper_reply(
-                user_text,
+                user_text=user_text,
                 user_name=first_name,
-                face_emotion=face_emotion or None,
-                face_valence=face_valence,
-                face_arousal=face_arousal,
-                face_dominance=face_dominance,
+                face_emotion=face_emotion,
+                valence=face_valence,
+                arousal=face_arousal,
+                dominance=face_dominance,
             )
             break
         except Exception as e:
@@ -177,8 +174,7 @@ def aurora_converse():
 
     if not reply_text:
         reply_text = (
-            "I’m here, but I'm having trouble responding right now. "
-            "We can take a breath and try again."
+            "I’m here with you. We can try that again whenever you’re ready."
         )
 
     # -------------------------
