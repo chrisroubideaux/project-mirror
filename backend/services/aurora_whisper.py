@@ -1,30 +1,50 @@
 # backend/services/aurora_whisper.py
 import os
 import io
-from typing import List, Dict, Any
+import re
+from typing import List, Dict
 from openai import OpenAI
-
-from services.datetime_context import get_time_context
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 # -------------------------------------------------------------------
-# 1. SHORT-TERM MEMORY + NAME LOCK
+# 1. SHORT-TERM MEMORY + HARD NAME LOCK
 # -------------------------------------------------------------------
 
 CONTEXT_BUFFER: List[Dict[str, str]] = []
-MAX_TURNS = 3
+MAX_TURNS = 2
 
-LOCKED_USER_NAME: str | None = None   # ✅ Name lock lives here
+LOCKED_USER_NAME: str | None = None
 
 
-def lock_name_if_valid(name: str):
+def extract_explicit_name(text: str) -> str | None:
+    """
+    HARD OVERRIDE if user explicitly states their name.
+    """
+    patterns = [
+        r"\bmy name is ([a-zA-Z]{2,})",
+        r"\bi am ([a-zA-Z]{2,})",
+        r"\bi'm ([a-zA-Z]{2,})",
+        r"\bcall me ([a-zA-Z]{2,})",
+        r"\byou can call me ([a-zA-Z]{2,})",
+    ]
+
+    text = text.lower().strip()
+
+    for pat in patterns:
+        match = re.search(pat, text)
+        if match:
+            return match.group(1)
+
+    return None
+
+
+def lock_name(name: str):
     global LOCKED_USER_NAME
-    if not LOCKED_USER_NAME and name:
-        nm = name.strip().split(" ")[0].lower()
-        if len(nm) >= 2 and nm not in ["friend", "guest", "unknown", "my", "the"]:
-            LOCKED_USER_NAME = nm
-            print("✅ NAME LOCKED:", LOCKED_USER_NAME)
+    nm = name.strip().split(" ")[0].lower()
+    if len(nm) >= 2:
+        LOCKED_USER_NAME = nm
+        print("✅ HARD NAME LOCK:", LOCKED_USER_NAME)
 
 
 def get_locked_name() -> str:
@@ -41,20 +61,17 @@ def add_to_context(role: str, content: str):
 
 
 def get_recent_context():
-    return [
-        turn for turn in CONTEXT_BUFFER[-MAX_TURNS * 2:]
-        if turn["role"] in ("user", "assistant")
-    ]
+    return CONTEXT_BUFFER[-MAX_TURNS * 2:]
 
 
 # -------------------------------------------------------------------
-# 2. WHISPER STT (FALSE POSITIVE FIX)
+# 2. WHISPER STT (NO FALSE POSITIVES)
 # -------------------------------------------------------------------
 
 def speech_to_text(audio_bytes: bytes) -> str:
     print("DEBUG — incoming audio size:", len(audio_bytes))
 
-    if not audio_bytes or len(audio_bytes) < 4000:
+    if not audio_bytes or len(audio_bytes) < 5000:
         return ""
 
     try:
@@ -70,7 +87,6 @@ def speech_to_text(audio_bytes: bytes) -> str:
         text = (transcript.text or "").strip()
         print("DEBUG — Whisper text:", text)
 
-        # ✅ FIX: ignore junk/noise output
         if not text or len(text) < 2:
             return ""
 
@@ -82,8 +98,28 @@ def speech_to_text(audio_bytes: bytes) -> str:
 
 
 # -------------------------------------------------------------------
-# 3. AURORA BRAIN — VISION EMOTION + NAME LOCK + NO SELF-INTRO EVER
+# 3. AURORA BRAIN — WITH HARD NAME OVERRIDE
 # -------------------------------------------------------------------
+
+BASE_SYSTEM_PROMPT = """
+You are Aurora — a calm, grounded, emotionally present companion.
+
+ABSOLUTE RULES:
+• Never introduce yourself.
+• Never say your name.
+• Never explain who you are.
+• Never analyze emotions out loud.
+• Never mention systems, camera, time, or environment.
+• Never repeat greetings.
+• Never interrupt the user.
+• Never guess names.
+
+STYLE:
+• 1 short natural sentence (2 max).
+• Warm, human, present.
+• Ask at most ONE gentle question.
+""".strip()
+
 
 def aurora_brain_reply(
     user_text: str,
@@ -95,65 +131,24 @@ def aurora_brain_reply(
 ) -> str:
 
     if not user_text:
-        return "I didn’t quite catch that. Could you say it again?"
+        return ""
 
-    # ✅ NAME LOCK
-    if user_name:
-        lock_name_if_valid(user_name)
+    # ✅ HARD NAME OVERRIDE FROM SPEECH
+    explicit = extract_explicit_name(user_text)
+    if explicit:
+        lock_name(explicit)
 
     locked_name = get_locked_name()
-
     add_to_context("user", user_text)
 
-    # ✅ INTERNAL EMOTIONAL MODULATION FROM VISION
-    emotional_style = "neutral"
-
-    if valence < 0.3:
-        emotional_style = "very_soft"
-    elif valence < 0.5:
-        emotional_style = "soft"
-    elif valence > 0.75:
-        emotional_style = "warm"
-
-    if arousal > 0.75:
-        emotional_style += "_grounding"
-
-    # ✅ SYSTEM PROMPT — HARD RULES
-    system_prompt = f"""
-You are Aurora — a calm, emotionally grounded therapist-like companion.
-
-ABSOLUTE NON-NEGOTIABLE RULES:
-• Never introduce yourself.
-• Never say your name.
-• Never explain who you are.
-• Never analyze emotions out loud.
-• Never mention emotion labels.
-• Never mention time, camera, system, or environment.
-• Never repeat the greeting behavior.
-• Never guess names.
-
-STYLE RULES:
-• 1–2 short natural sentences.
-• Calm, validating, grounded.
-• Ask at most one gentle question.
-• If a name exists ("{locked_name}"), you may use it occasionally, never every reply.
-
-INTERNAL ONLY (DO NOT SAY):
-• Face emotion: {face_emotion}
-• valence={valence:.2f}
-• arousal={arousal:.2f}
-• dominance={dominance:.2f}
-• style={emotional_style}
-""".strip()
-
-    messages = [{"role": "system", "content": system_prompt}]
+    messages = [{"role": "system", "content": BASE_SYSTEM_PROMPT}]
     messages.extend(get_recent_context())
 
     try:
         resp = client.chat.completions.create(
             model="gpt-4o-mini",
-            temperature=0.6,
-            max_tokens=120,
+            temperature=0.75,
+            max_tokens=60,
             messages=messages,
         )
 
@@ -165,7 +160,7 @@ INTERNAL ONLY (DO NOT SAY):
 
     except Exception as e:
         print("GPT ERROR:", repr(e))
-        return "I'm here with you. We can try again."
+        return "I'm here with you."
 
 
 # -------------------------------------------------------------------
@@ -188,6 +183,7 @@ def aurora_whisper_reply(
         arousal=arousal,
         dominance=dominance,
     )
+
 
 
 """""""""

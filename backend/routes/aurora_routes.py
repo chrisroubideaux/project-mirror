@@ -1,7 +1,5 @@
 # backend/routes/aurora_routes.py
 
-# backend/routes/aurora_routes.py
-
 import io
 import random
 import time
@@ -10,6 +8,8 @@ from flask import Blueprint, request, send_file, jsonify
 from services.aurora_whisper import speech_to_text, aurora_whisper_reply
 from services.aurora_speech import text_to_speech
 from services.datetime_context import get_time_context
+from services.heygen_liveavatar import create_liveavatar_session, close_liveavatar_session
+
 
 aurora_bp = Blueprint("aurora", __name__, url_prefix="/api/aurora")
 
@@ -304,6 +304,38 @@ def aurora_emotion_react():
         text = random.choice(candidates)
 
     return safe_tts(text, filename="aurora_emotion_react.mp3")
+
+# ------------------------------------------------------
+# /goodbye
+# ------------------------------------------------------
+@aurora_bp.route("/goodbye", methods=["POST"])
+def aurora_goodbye():
+    farewell_lines = [
+        "I’ll be right here whenever you come back.",
+        "Take care of yourself out there.",
+        "Until next time.",
+        "I’m glad we talked.",
+        "Be gentle with yourself.",
+    ]
+
+    text = random.choice(farewell_lines)
+    return safe_tts(text, filename="aurora_goodbye.mp3")
+
+# ------------------------------------------------------
+# ✅ /heygen-session  (LiveAvatar WebRTC Broker)
+# ------------------------------------------------------
+@aurora_bp.route("/heygen-session", methods=["POST"])
+def create_heygen_session():
+    """
+    Creates a new HeyGen LiveAvatar real-time WebRTC session
+    """
+    try:
+        session = create_liveavatar_session()
+        return jsonify(session)
+    except Exception as e:
+        print("HeyGen session error:", e)
+        return jsonify({"error": str(e)}), 500
+
 
 
 """"""""""
