@@ -42,10 +42,9 @@ export default function RealTimeEmotionCamera({ onEmotion }: Props) {
   const [guestName, setGuestName] = useState("");
   const [nameCaptured, setNameCaptured] = useState(false);
 
-  // HF errors
   const [hfErrorOnce, setHfErrorOnce] = useState(false);
 
-  // ✅ last good emotion (front-end safety)
+  // ✅ Last good emotion fallback
   const lastGoodEmotionRef = useRef<EmotionPayload>({
     emotion: "neutral",
     confidence: 0.5,
@@ -54,7 +53,7 @@ export default function RealTimeEmotionCamera({ onEmotion }: Props) {
     dominance: 0.5,
   });
 
-  // Smoothing buffer
+  // ✅ Emotion smoothing
   const smoothBufferRef = useRef<EmotionPayload[]>([]);
   const SMOOTH_WINDOW = 10;
 
@@ -80,7 +79,6 @@ export default function RealTimeEmotionCamera({ onEmotion }: Props) {
 
       setStreaming(true);
 
-      // Greet, then capture name
       await playGreeting();
       setTimeout(startNameCapture, 600);
     } catch (err) {
@@ -114,7 +112,7 @@ export default function RealTimeEmotionCamera({ onEmotion }: Props) {
   }, []);
 
   // -------------------------------------------------------------
-  // EMOTION POLLING (HF GPU endpoint)
+  // ✅ EMOTION POLLING (PAUSED WHILE AURORA SPEAKS)
   // -------------------------------------------------------------
   const startEmotionPolling = () => {
     stopEmotionPolling();
@@ -155,6 +153,7 @@ export default function RealTimeEmotionCamera({ onEmotion }: Props) {
     for (const e of buf) {
       counts[e.emotion] = (counts[e.emotion] || 0) + 1;
     }
+
     const dominant = Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0];
 
     return {
@@ -166,6 +165,9 @@ export default function RealTimeEmotionCamera({ onEmotion }: Props) {
     };
   };
 
+  // -------------------------------------------------------------
+  // CAPTURE FRAME → HF EMOTION
+  // -------------------------------------------------------------
   const captureFrame = async () => {
     if (!videoRef.current) return;
 
@@ -202,7 +204,7 @@ export default function RealTimeEmotionCamera({ onEmotion }: Props) {
       }
 
       const raw = (await res.json()) as EmotionPayload;
-      if (!raw || !raw.emotion) return;
+      if (!raw?.emotion) return;
 
       lastGoodEmotionRef.current = raw;
 
@@ -214,7 +216,6 @@ export default function RealTimeEmotionCamera({ onEmotion }: Props) {
         console.error("HF emotion fetch error:", err);
         setHfErrorOnce(true);
       }
-      // fallback to last good
       setEmotionResult(lastGoodEmotionRef.current);
     }
   };
@@ -228,6 +229,13 @@ export default function RealTimeEmotionCamera({ onEmotion }: Props) {
       if (!res.ok) return;
 
       const blob = await res.blob();
+
+      // stop any previous audio just in case
+      if (currentAuroraAudioRef.current) {
+        currentAuroraAudioRef.current.pause();
+        currentAuroraAudioRef.current = null;
+      }
+
       const audio = new Audio(URL.createObjectURL(blob));
       currentAuroraAudioRef.current = audio;
       isAuroraSpeakingRef.current = true;
@@ -244,7 +252,7 @@ export default function RealTimeEmotionCamera({ onEmotion }: Props) {
   };
 
   // -------------------------------------------------------------
-  // NAME CAPTURE (same behavior, just no emotion logic here)
+  // NAME CAPTURE
   // -------------------------------------------------------------
   const startNameCapture = async () => {
     try {
@@ -297,7 +305,7 @@ export default function RealTimeEmotionCamera({ onEmotion }: Props) {
   };
 
   // -------------------------------------------------------------
-  // AUTO CONVERSATION LOOP
+  // AUTO LOOP
   // -------------------------------------------------------------
   const startAutoConversationLoop = () => {
     if (conversationActiveRef.current) return;
@@ -317,7 +325,8 @@ export default function RealTimeEmotionCamera({ onEmotion }: Props) {
   };
 
   const recordVoiceTurn = async () => {
-    if (!conversationActiveRef.current) return;
+    // ✅ extra guard to avoid starting a turn while she's talking
+    if (!conversationActiveRef.current || isAuroraSpeakingRef.current) return;
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -331,8 +340,8 @@ export default function RealTimeEmotionCamera({ onEmotion }: Props) {
         setIsListening(false);
         const blob = new Blob(chunks, { type: "audio/webm" });
 
-        if (blob.size > 1500) {
-          await sendToAurora(blob);
+        if (blob.size > 2500) {
+          sendToAurora(blob); // non-blocking
         }
 
         stream.getTracks().forEach((t) => t.stop());
@@ -340,7 +349,7 @@ export default function RealTimeEmotionCamera({ onEmotion }: Props) {
       };
 
       rec.start();
-      setTimeout(() => rec.stop(), 5000);
+      setTimeout(() => rec.stop(), 3000); // slightly shorter window
     } catch (err) {
       console.error("Mic error:", err);
       setTimeout(scheduleNextTurn, 1500);
@@ -348,9 +357,18 @@ export default function RealTimeEmotionCamera({ onEmotion }: Props) {
   };
 
   // -------------------------------------------------------------
-  // SEND TO AURORA (now fed by HF emotion)
+  // ✅ SEND TO AURORA (HARD LOCK + NO OVERLAP + PAUSES VISION)
   // -------------------------------------------------------------
   const sendToAurora = async (blob: Blob) => {
+    // 🔒 HARD AUDIO LOCK: if she's already speaking, don't send another turn
+    if (isAuroraSpeakingRef.current) {
+      console.warn("Aurora already speaking — blocked overlapping request");
+      return;
+    }
+
+    stopEmotionPolling(); // freeze emotion while Aurora speaks
+    isAuroraSpeakingRef.current = true; // lock immediately
+
     const fd = new FormData();
     fd.append("audio", blob, "speech.webm");
     fd.append("user_name", guestName || "friend");
@@ -362,27 +380,46 @@ export default function RealTimeEmotionCamera({ onEmotion }: Props) {
     fd.append("arousal", String(safeEmotion.arousal));
     fd.append("dominance", String(safeEmotion.dominance));
 
-    const res = await fetch("http://localhost:5000/api/aurora/converse", {
-      method: "POST",
-      body: fd,
-    });
+    try {
+      const res = await fetch("http://localhost:5000/api/aurora/converse", {
+        method: "POST",
+        body: fd,
+      });
 
-    if (!res.ok) {
-      console.error("Aurora error:", await res.text());
-      return;
-    }
+      if (!res.ok) {
+        console.error("Aurora error:", await res.text());
+        isAuroraSpeakingRef.current = false;
+        startEmotionPolling();
+        return;
+      }
 
-    const outBlob = await res.blob();
-    const audio = new Audio(URL.createObjectURL(outBlob));
-    currentAuroraAudioRef.current = audio;
-    isAuroraSpeakingRef.current = true;
+      const outBlob = await res.blob();
 
-    audio.onended = () => {
+      // 🔇 stop any previous audio just in case
+      if (currentAuroraAudioRef.current) {
+        currentAuroraAudioRef.current.pause();
+        currentAuroraAudioRef.current = null;
+      }
+
+      const audio = new Audio(URL.createObjectURL(outBlob));
+      currentAuroraAudioRef.current = audio;
+
+      audio.onended = () => {
+        isAuroraSpeakingRef.current = false;
+        currentAuroraAudioRef.current = null;
+        startEmotionPolling(); // resume emotion after speech
+      };
+
+      audio.play().catch((e) => {
+        console.error("Audio playback error:", e);
+        isAuroraSpeakingRef.current = false;
+        startEmotionPolling();
+      });
+    } catch (err) {
+      console.error("Aurora fetch error:", err);
       isAuroraSpeakingRef.current = false;
-      currentAuroraAudioRef.current = null;
-    };
-
-    audio.play().catch((e) => console.error("Audio playback error:", e));
+      startEmotionPolling();
+    }
   };
 
   // -------------------------------------------------------------
@@ -393,28 +430,13 @@ export default function RealTimeEmotionCamera({ onEmotion }: Props) {
 
   return (
     <>
-      {/* — CARD WRAPPER — */}
       <div
         className="card p-4 bg-dark text-light border-0 shadow-lg mx-auto"
-        style={{
-          width: "100%",
-          maxWidth: "720px",
-          borderRadius: "22px",
-          background: "rgba(15,15,15,0.65)",
-          backdropFilter: "blur(14px)",
-        }}
+        style={{ maxWidth: "720px", borderRadius: "22px" }}
       >
-        {/* — VIDEO BOX — */}
         <div
-          className="position-relative rounded mb-4 overflow-hidden"
-          style={{
-            height: "400px",
-            borderRadius: "18px",
-            border: streaming
-              ? "2px solid rgba(0,180,255,0.9)"
-              : "2px solid rgba(120,120,120,0.4)",
-            backgroundColor: "#000",
-          }}
+          className="position-relative mb-4"
+          style={{ height: "400px", background: "#000" }}
         >
           <video
             ref={videoRef}
@@ -425,81 +447,41 @@ export default function RealTimeEmotionCamera({ onEmotion }: Props) {
             style={{ objectFit: "cover" }}
           />
 
-          {streaming && (
-            <div
-              className="position-absolute top-0 end-0 m-3 px-2 py-1 rounded-pill text-white"
-              style={{ background: "rgba(255,0,0,0.85)", fontSize: "0.8rem" }}
-            >
-              ● LIVE
-            </div>
-          )}
-
-          {/* HUD */}
-          {streaming && (
-            <div
-              className="position-absolute start-0 bottom-0 m-3 p-3 rounded-3"
-              style={{
-                background: "rgba(10,10,20,0.86)",
-                fontSize: "0.8rem",
-                backdropFilter: "blur(10px)",
-              }}
-            >
-              <div>
-                Emotion:{" "}
-                <strong>{dominantEmotion || "Detecting…"}</strong>{" "}
-                {typeof confidence === "number" && (
-                  <span className="text-info ms-1">
-                    {(confidence * 100).toFixed(0)}%
-                  </span>
-                )}
-              </div>
-
-              <div>
-                {isListening
-                  ? "🎙️ Listening…"
-                  : isAuroraSpeakingRef.current
-                  ? "🔊 Aurora speaking…"
-                  : "Idle"}
-              </div>
-
-              {nameCaptured && (
-                <div className="mt-1">
-                  Name: <strong>{guestName}</strong>
-                </div>
-              )}
-            </div>
-          )}
-
-          {streaming && (
-            <button
-              onClick={() => setShowFullscreen(true)}
-              className="btn btn-outline-light position-absolute bottom-0 end-0 m-3"
-            >
-              Fullscreen
-            </button>
-          )}
+          <div className="position-absolute bottom-0 start-0 m-3 text-white">
+            Emotion: <strong>{dominantEmotion}</strong>{" "}
+            {typeof confidence === "number" && (
+              <span>({Math.round(confidence * 100)}%)</span>
+            )}
+            <br />
+            {isListening
+              ? "🎙️ Listening…"
+              : isAuroraSpeakingRef.current
+              ? "🔊 Aurora speaking…"
+              : "Idle"}
+            <br />
+            {nameCaptured && (
+              <>
+                Name: <strong>{guestName}</strong>
+              </>
+            )}
+          </div>
         </div>
 
         {!streaming ? (
-          <button
-            className="btn w-100 py-2 fs-5 fw-semibold"
-            onClick={startCamera}
-            style={{ background: "rgba(0,140,255,.8)", borderRadius: "14px" }}
-          >
-            Start Emotion Session
+          <button className="btn w-100" onClick={startCamera}>
+            Start
           </button>
         ) : (
           <button
-            className="btn w-100 py-2 fs-5 fw-semibold"
+            className="btn w-100"
             onClick={() => window.location.reload()}
-            style={{ background: "rgba(40,40,40,.85)", borderRadius: "14px" }}
           >
-            Stop Session
+            Stop
           </button>
         )}
       </div>
 
-      {/* FULLSCREEN MODAL */}
+      {/* optional fullscreen modal – if you still use it */}
       {showFullscreen && (
         <div
           className="modal fade show"
@@ -528,6 +510,7 @@ export default function RealTimeEmotionCamera({ onEmotion }: Props) {
     </>
   );
 }
+
 
 
 

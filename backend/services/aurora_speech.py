@@ -1,10 +1,10 @@
 # backend/services/aurora_speech.py
-
 import os
 import requests
 
 ELEVEN_KEY = os.getenv("ELEVENLABS_API_KEY")
-VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID")  # Must be a real ElevenLabs voice ID
+VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID")
+
 
 class SpeechServiceError(Exception):
     pass
@@ -28,17 +28,19 @@ def text_to_speech(text: str) -> bytes:
     }
 
     payload = {
+        "model_id": "eleven_turbo_v2",  # ✅ FAST MODEL
         "text": text,
         "voice_settings": {
-            "stability": 0.72,
-            "similarity_boost": 0.90,
-            "style": 0.25,
+            "stability": 0.35,          # ✅ removes robotic monotone
+            "similarity_boost": 0.55, 
+            "style": 0.65,              # ✅ emotional cadence
             "use_speaker_boost": True,
         },
+        "optimize_streaming_latency": 2,  # ✅ MAJOR speed-up
     }
 
     try:
-        res = requests.post(url, headers=headers, json=payload, timeout=20)
+        res = requests.post(url, headers=headers, json=payload, timeout=15)
     except Exception as e:
         raise SpeechServiceError(f"Request failed: {e}")
 
@@ -46,6 +48,7 @@ def text_to_speech(text: str) -> bytes:
         raise SpeechServiceError(f"ElevenLabs Error {res.status_code}: {res.text}")
 
     return res.content
+
 
 
 
