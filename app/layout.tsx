@@ -7,6 +7,7 @@ import 'react-circular-progressbar/dist/styles.css';
 import '@/styles/globals.css';
 import '@/styles/card.css';
 import '@/styles/about.css';
+import '@/styles/aurora.css';
 
 const barlowCondensed = Barlow_Condensed({
   weight: ["400"],     // THIN

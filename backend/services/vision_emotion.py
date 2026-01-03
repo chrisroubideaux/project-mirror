@@ -1,5 +1,4 @@
 # backend/services/vision_emotion.py
-# backend/services/vision_emotion.py
 
 import os
 import io
