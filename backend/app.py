@@ -1,5 +1,6 @@
 # backend/app.py
 
+
 from dotenv import load_dotenv
 load_dotenv()   # MUST BE FIRST
 

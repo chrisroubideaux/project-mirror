@@ -1,0 +1,43 @@
+/* styles/aurora.css */
+/* ============================= */
+/* AURORA VISUAL PRESENCE STYLES */
+/* ============================= */
+
+.aurora-presence {
+  width: 100%;
+  height: 420px; /* 🔥 NEVER COLLAPSES */
+  position: relative;
+  overflow: hidden;
+  border-radius: 18px;
+
+  background: radial-gradient(
+    circle at center,
+    rgba(40, 80, 120, 0.35),
+    rgba(0, 0, 0, 0.85)
+  );
+
+  border: 1px solid rgba(255, 255, 255, 0.12);
+
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.05),
+    inset 0 0 40px rgba(0, 0, 0, 0.55);
+}
+
+/* Canvas ALWAYS fills the container */
+.aurora-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* Cinematic overlay */
+.aurora-vignette {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    circle at center,
+    rgba(0, 0, 0, 0) 0%,
+    rgba(0, 0, 0, 0.35) 65%,
+    rgba(0, 0, 0, 0.6) 100%
+  );
+}

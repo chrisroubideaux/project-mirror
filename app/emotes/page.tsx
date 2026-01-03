@@ -1,62 +1,33 @@
-// app/emotes/page.tsx
-'use client';
+"use client";
 
-import { useState } from 'react';
-import Nav from '@/components/nav/Nav';  
-import RealTimeEmotionCamera from '@/components/camera/RealTimeEmotionCamera';
-import EmpathyMeter from '@/components/emotes/EmpathyMeter';
-import GlassStatMeters from '@/components/emotes/GlassStatMeters';
-import { motion } from 'framer-motion';
+import Nav from "@/components/nav/Nav";
+import AuroraController from "@/components/avatar/AuroraController";
 
-export default function EmotionPage() {
-  const [result, setResult] = useState<any>(null);
-
+export default function EmotesPage() {
   return (
-    <div className="">
-
-      
+    <div
+      className="bg-dark text-light"
+      style={{
+        minHeight: "100vh",
+        display: "flex",
+        flexDirection: "column",
+      }}
+    >
       <Nav />
 
-      <div className="container text-center py-5">
-
-        <motion.h1
-          initial={{ opacity: 0, y: -15 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-          className="display-4 fw-bold mb-3 text-light"
-        >
-          Project AURORA
-        </motion.h1>
-
-        <p className="text-secondary mb-4">
-          Real-Time Emotion Recognition Engine
-        </p>
-
-        {/* CAMERA FEED */}
-        <RealTimeEmotionCamera onEmotion={setResult} />
-
-        {/* LIVE RESULTS */}
-        {result && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="mt-5"
-          >
-            <EmpathyMeter score={result.valence} />
-
-            <p className="mt-3 fs-5 text-light">
-              <strong>Emotion:</strong> {result.emotion}<br />
-              <strong>Confidence:</strong>{" "}
-              {Math.round((result.score || result.confidence) * 100)}%<br />
-              <strong>Valence:</strong> {result.valence}<br />
-              <strong>Arousal:</strong> {result.arousal}
-            </p>
-          </motion.div>
-        )}
-
-        <GlassStatMeters />
-
-      </div>
+      <main
+        style={{
+          flex: 1,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "3rem 1rem",
+        }}
+      >
+        <div style={{ width: "100%", maxWidth: 1000 }}>
+          <AuroraController />
+        </div>
+      </main>
     </div>
   );
 }
