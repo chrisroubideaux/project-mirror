@@ -10,10 +10,10 @@ import type {
 type Particle = {
   angle: number;
   radius: number;
-  baseRadius: number;
-  jitterPhase: number;
-  jitterAmp: number;
   vel: number;
+
+  // PSO memory
+  pbest: number;
 };
 
 export default function AuroraPresence({
@@ -41,7 +41,7 @@ export default function AuroraPresence({
   const breathRef = useRef(0);
 
   // ---------------------------------------------
-  // INIT PARTICLES
+  // INIT PARTICLES (WITH MEMORY)
   // ---------------------------------------------
   const initParticles = (count: number) => {
     particlesRef.current = Array.from({ length: count }).map(() => {
@@ -49,20 +49,17 @@ export default function AuroraPresence({
       return {
         angle: Math.random() * Math.PI * 2,
         radius: r,
-        baseRadius: r,
-        jitterPhase: Math.random() * Math.PI * 2,
-        jitterAmp: 0.004 + Math.random() * 0.006,
         vel: 0,
+        pbest: r,
       };
     });
   };
 
   // ---------------------------------------------
-  // AUDIO PIPELINE (SAFE + REUSABLE)
+  // AUDIO PIPELINE
   // ---------------------------------------------
   const ensureAudioPipeline = () => {
-    if (!audio) return;
-    if (audio.readyState < 2) return; // must have data
+    if (!audio || audio.readyState < 2) return;
 
     if (!audioCtxRef.current) {
       audioCtxRef.current = new AudioContext();
@@ -87,14 +84,12 @@ export default function AuroraPresence({
     }
   };
 
-  // ---------------------------------------------
-  // 🔑 RE-ARM ON EVERY AUDIO PLAY (THIS WAS MISSING)
-  // ---------------------------------------------
+  // re-arm on every utterance
   useEffect(() => {
     if (!audio) return;
 
     const onPlay = () => {
-      rmsRef.current = 0; // reset envelope per utterance
+      rmsRef.current = 0;
       ensureAudioPipeline();
     };
 
@@ -108,7 +103,7 @@ export default function AuroraPresence({
   }, [audio]);
 
   // ---------------------------------------------
-  // MAIN LOOP
+  // MAIN LOOP (TRUE PSO)
   // ---------------------------------------------
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -125,7 +120,6 @@ export default function AuroraPresence({
       canvas.height = h * dpr;
       canvas.style.width = `${w}px`;
       canvas.style.height = `${h}px`;
-
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     };
 
@@ -146,18 +140,17 @@ export default function AuroraPresence({
 
       // breathing
       breathRef.current += 0.01;
-      const breath = Math.sin(breathRef.current) * 0.03;
+      const breath = Math.sin(breathRef.current) * 0.02;
 
       // rotation
       rotationRef.current +=
-        state === "talking" ? 0.002 : 0.0008;
+        state === "talking" ? 0.0016 : 0.0006;
 
       // ---- AUDIO RMS ----
       let audioEnergy = 0;
 
       if (state === "talking" && audio) {
         ensureAudioPipeline();
-
         if (analyserRef.current && dataRef.current) {
           analyserRef.current.getByteTimeDomainData(dataRef.current);
 
@@ -168,29 +161,50 @@ export default function AuroraPresence({
           }
 
           const rms = Math.sqrt(sum / dataRef.current.length);
-          rmsRef.current += (rms - rmsRef.current) * 0.18;
+          rmsRef.current += (rms - rmsRef.current) * 0.08;
           audioEnergy = rmsRef.current;
         }
       } else {
-        rmsRef.current *= 0.92;
+        rmsRef.current *= 0.94;
         audioEnergy = rmsRef.current;
       }
 
+      // ---------------------------------------------
+      // PSO PARAMETERS (TUNED FOR FLUIDITY)
+      // ---------------------------------------------
+      const omega = 0.92; // inertia
+      const c1 = 0.04; // personal memory
+      const c2 = 0.08; // swarm cohesion
+
+      const arousal = emotion?.arousal ?? 0.5;
+
+      // GLOBAL BEST = swarm intention
       const baseRadius = Math.min(w, h) * 0.32;
-      const voice = audioEnergy * 2.2;
+      const gBest =
+        1 +
+        audioEnergy * 0.9 +
+        arousal * 0.35;
 
       for (const p of particlesRef.current) {
-        // micro jitter
-        p.jitterPhase += p.jitterAmp;
-        const jitter = Math.sin(p.jitterPhase) * 0.01;
+        // random factors
+        const r1 = Math.random();
+        const r2 = Math.random();
 
-        // SPRING = FLUIDITY
-        const target = p.baseRadius + voice * 0.4;
-        p.vel += (target - p.radius) * 0.1;
-        p.vel *= 0.85;
+        // PSO velocity update
+        p.vel =
+          omega * p.vel +
+          c1 * r1 * (p.pbest - p.radius) +
+          c2 * r2 * (gBest - p.radius);
+
         p.radius += p.vel;
 
-        const r = baseRadius * (p.radius + breath + jitter);
+        // update personal best slowly
+        p.pbest += (p.radius - p.pbest) * 0.002;
+
+        // subtle angular drift
+        p.angle += 0.00012 + audioEnergy * 0.0005;
+
+        const r = baseRadius * (p.radius + breath);
         const a = p.angle + rotationRef.current;
 
         const x = cx + Math.cos(a) * r;
@@ -204,7 +218,6 @@ export default function AuroraPresence({
     };
 
     tick();
-
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
       window.removeEventListener("resize", resize);
