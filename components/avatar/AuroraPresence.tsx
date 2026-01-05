@@ -1,4 +1,5 @@
 // components/avatar/AuroraPresence.tsx
+// components/avatar/AuroraPresence.tsx
 "use client";
 
 import { useEffect, useRef } from "react";
@@ -15,11 +16,12 @@ type Particle = {
   seed: number;
 };
 
-const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
+const clamp = (v: number, a: number, b: number) =>
+  Math.max(a, Math.min(b, v));
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 const smoothstep = (t: number) => t * t * (3 - 2 * t);
 
-// ---- lightweight smooth noise (Perlin-ish) ----
+// lightweight smooth noise
 function hash1(n: number) {
   const s = Math.sin(n) * 43758.5453123;
   return s - Math.floor(s);
@@ -51,16 +53,15 @@ export default function AuroraPresence({
   const sourceRef = useRef<MediaElementAudioSourceNode | null>(null);
   const dataRef = useRef<Uint8Array | null>(null);
 
-  // envelopes
-  const envSlowRef = useRef(0);
   const envFastRef = useRef(0);
+  const envSlowRef = useRef(0);
   const envSmoothRef = useRef(0);
 
-  // motion
+  // ---- motion ----
   const rotationRef = useRef(0);
   const tRef = useRef(0);
 
-  // hesitation
+  // ---- hesitation ----
   const prevStateRef = useRef<AuroraState>("idle");
   const talkStartRef = useRef(0);
 
@@ -108,20 +109,17 @@ export default function AuroraPresence({
     }
   };
 
-  // re-arm every utterance
+  // re-arm envelopes on every utterance
   useEffect(() => {
     if (!audio) return;
-
     const onPlay = () => {
-      envSlowRef.current = 0;
       envFastRef.current = 0;
+      envSlowRef.current = 0;
       envSmoothRef.current = 0;
       ensureAudioPipeline();
     };
-
     audio.addEventListener("play", onPlay);
     audio.addEventListener("playing", onPlay);
-
     return () => {
       audio.removeEventListener("play", onPlay);
       audio.removeEventListener("playing", onPlay);
@@ -162,22 +160,14 @@ export default function AuroraPresence({
 
       tRef.current += 1 / 60;
 
-      // hesitation detection
+      // detect state change
       if (prevStateRef.current !== state) {
-        if (state === "talking") {
-          talkStartRef.current = performance.now();
-        }
+        if (state === "talking") talkStartRef.current = performance.now();
         prevStateRef.current = state;
       }
 
-      ctx.fillStyle = "rgba(0,0,0,0.18)";
-      ctx.fillRect(0, 0, w, h);
-
-      rotationRef.current += state === "talking" ? 0.0012 : 0.0005;
-
       // ---------- AUDIO ----------
       let rawRms = 0;
-
       if (state === "talking" && audio) {
         ensureAudioPipeline();
         if (analyserRef.current && dataRef.current) {
@@ -193,80 +183,92 @@ export default function AuroraPresence({
 
       envFastRef.current += (rawRms - envFastRef.current) * 0.35;
       envSlowRef.current += (rawRms - envSlowRef.current) * 0.06;
-      envSmoothRef.current += (rawRms - envSmoothRef.current) * 0.045; // 🔥 viscous
+      envSmoothRef.current += (rawRms - envSmoothRef.current) * 0.045;
 
       const audioEnergy = envSmoothRef.current;
-      const syllable = clamp((envFastRef.current - envSlowRef.current) * 10, 0, 1);
+      const syllable = clamp(
+        (envFastRef.current - envSlowRef.current) * 10,
+        0,
+        1
+      );
 
       const arousal = emotion?.arousal ?? 0.5;
       const valence = emotion?.valence ?? 0.5;
 
       // hesitation ramp
-      const hesMs = 260;
-      const hes =
+      const hes = smoothstep(
         state === "talking"
-          ? smoothstep(clamp((performance.now() - talkStartRef.current) / hesMs, 0, 1))
-          : 0;
+          ? clamp((performance.now() - talkStartRef.current) / 260, 0, 1)
+          : 0
+      );
 
-      // Perlin breath (viscous)
-      const baseBreath = Math.sin(tRef.current * 1.1) * 0.016;
-      const turbAmp = 0.007 * (0.25 + arousal); // 🔥 silk
+      // ---------- BACKGROUND (COSMIC NEBULA) ----------
+      const baseHue = 190 + valence * 50;
+      const breathe = Math.sin(tRef.current * 0.4) * 6;
+      const hue = baseHue + breathe;
 
-      // gbest (with syllable pulses)
-      const gBase = 1 + audioEnergy * 0.85 + arousal * 0.28;
-      const gBest = gBase + syllable * 0.45 * hes;
+      const bg = ctx.createRadialGradient(
+        cx,
+        cy,
+        Math.min(w, h) * 0.2,
+        cx,
+        cy,
+        Math.max(w, h) * 0.9
+      );
 
-      // PSO COEFFS (🔥 viscous tuning)
-      const omega = state === "talking" ? lerp(0.975, 0.955, hes) : 0.985;
-      const c1 = 0.04;
-      const c2 = state === "talking" ? lerp(0.015, 0.055, hes) : 0.02;
+      bg.addColorStop(0, `hsla(${hue}, 70%, 55%, 0.22)`);
+      bg.addColorStop(0.45, `hsla(${hue - 20}, 60%, 35%, 0.28)`);
+      bg.addColorStop(1, `hsla(${hue - 40}, 50%, 15%, 0.35)`);
 
-      // field visualization
+      ctx.fillStyle = bg;
+      ctx.fillRect(0, 0, w, h);
+
+      // ---------- MOTION ----------
+      rotationRef.current += state === "talking" ? 0.0012 : 0.0006;
+
       const baseRadiusPx = Math.min(w, h) * 0.32;
-      const fieldR = baseRadiusPx * gBest;
+      const gBest = 1 + audioEnergy * 0.9 + syllable * 0.4;
 
-      ctx.save();
-      ctx.globalCompositeOperation = "lighter";
-      const grad = ctx.createRadialGradient(cx, cy, fieldR * 0.6, cx, cy, fieldR * 1.2);
-      grad.addColorStop(0, "rgba(120,210,255,0)");
-      grad.addColorStop(0.7, `rgba(120,210,255,${0.08 + syllable * 0.18})`);
-      grad.addColorStop(1, "rgba(120,210,255,0)");
-      ctx.fillStyle = grad;
-      ctx.beginPath();
-      ctx.arc(cx, cy, fieldR * 1.2, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
+      const omega =
+        state === "talking" ? lerp(0.975, 0.955, hes) : 0.985;
+      const c1 = 0.035;
+      const c2 =
+        state === "talking" ? lerp(0.015, 0.055, hes) : 0.02;
+
+      const baseBreath = Math.sin(tRef.current * 1.2) * 0.018;
+      const turbAmp = 0.007 * (0.25 + arousal);
 
       // ---------- PARTICLES ----------
       for (const p of particlesRef.current) {
         const n = noise1(p.seed + p.angle * 3 + tRef.current * 0.55);
         const turbulence = (n - 0.5) * turbAmp;
-        const breath = baseBreath + turbulence;
 
-        p.angle += 0.0001 + (audioEnergy * 0.00035 + syllable * 0.00045) * hes;
-
-        const r1 = Math.random();
-        const r2 = Math.random();
+        p.angle += 0.00012 + (audioEnergy + syllable) * 0.0005 * hes;
 
         p.vel =
           omega * p.vel +
-          c1 * r1 * (p.pbest - p.radius) +
-          c2 * r2 * (gBest - p.radius);
+          c1 * Math.random() * (p.pbest - p.radius) +
+          c2 * Math.random() * (gBest - p.radius);
 
         p.radius += p.vel;
         p.radius = clamp(p.radius, 0.05, 1.75);
-        p.pbest += (p.radius - p.pbest) * 0.0014;
+        p.pbest += (p.radius - p.pbest) * 0.0015;
 
         const a = p.angle + rotationRef.current;
-        const r = baseRadiusPx * (p.radius + breath);
+        const r = baseRadiusPx * (p.radius + baseBreath + turbulence);
+
+        const x = cx + Math.cos(a) * r;
+        const y = cy + Math.sin(a) * r;
+
+        const alpha = clamp(
+          0.22 + valence * 0.25 + syllable * 0.12,
+          0.12,
+          0.6
+        );
 
         ctx.beginPath();
-        ctx.arc(cx + Math.cos(a) * r, cy + Math.sin(a) * r, 1.05, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(140,220,255,${clamp(
-          0.18 + valence * 0.25 + syllable * 0.12,
-          0.12,
-          0.55
-        )})`;
+        ctx.arc(x, y, 1.08, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(140,220,255,${alpha})`;
         ctx.fill();
       }
     };
