@@ -1,5 +1,5 @@
 // components/camera/RealTimeEmotionCamera.tsx
-// components/camera/RealTimeEmotionCamera.tsx
+
 "use client";
 
 import React, {
