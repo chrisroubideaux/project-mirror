@@ -6,19 +6,14 @@ import type {
   AuroraState,
   EmotionPayload,
 } from "@/components/camera/RealTimeEmotionCamera";
-import "@/styles/aurora.css";
 
 type Particle = {
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
-  r: number;
-
-  // 🔥 individual micro motion
   angle: number;
   radius: number;
-  speed: number;
+  baseRadius: number;
+  jitterPhase: number;
+  jitterAmp: number;
+  vel: number;
 };
 
 export default function AuroraPresence({
@@ -34,84 +29,87 @@ export default function AuroraPresence({
   const particlesRef = useRef<Particle[]>([]);
   const rafRef = useRef<number | null>(null);
 
-  // live refs
-  const stateRef = useRef<AuroraState>("idle");
-  const emotionRef = useRef<EmotionPayload | null>(null);
-
-  useEffect(() => {
-    stateRef.current = state;
-  }, [state]);
-
-  useEffect(() => {
-    emotionRef.current = emotion;
-  }, [emotion]);
-
-  // -----------------------------
-  // AUDIO ANALYSER
-  // -----------------------------
+  // ---- audio ----
   const audioCtxRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
-  const dataRef = useRef<Uint8Array<ArrayBuffer> | null>(null);
-  const smoothedEnergyRef = useRef(0);
+  const sourceRef = useRef<MediaElementAudioSourceNode | null>(null);
+  const dataRef = useRef<Uint8Array | null>(null);
+  const rmsRef = useRef(0);
 
-  useEffect(() => {
+  // ---- motion ----
+  const rotationRef = useRef(0);
+  const breathRef = useRef(0);
+
+  // ---------------------------------------------
+  // INIT PARTICLES
+  // ---------------------------------------------
+  const initParticles = (count: number) => {
+    particlesRef.current = Array.from({ length: count }).map(() => {
+      const r = Math.sqrt(Math.random());
+      return {
+        angle: Math.random() * Math.PI * 2,
+        radius: r,
+        baseRadius: r,
+        jitterPhase: Math.random() * Math.PI * 2,
+        jitterAmp: 0.004 + Math.random() * 0.006,
+        vel: 0,
+      };
+    });
+  };
+
+  // ---------------------------------------------
+  // AUDIO PIPELINE (SAFE + REUSABLE)
+  // ---------------------------------------------
+  const ensureAudioPipeline = () => {
     if (!audio) return;
+    if (audio.readyState < 2) return; // must have data
 
     if (!audioCtxRef.current) {
       audioCtxRef.current = new AudioContext();
     }
 
-    const ctx = audioCtxRef.current;
-    ctx.resume().catch(() => {});
+    if (!analyserRef.current) {
+      analyserRef.current = audioCtxRef.current.createAnalyser();
+      analyserRef.current.fftSize = 1024;
+      analyserRef.current.smoothingTimeConstant = 0.9;
+      dataRef.current = new Uint8Array(analyserRef.current.fftSize);
+    }
 
-    const source = ctx.createMediaElementSource(audio);
-    const analyser = ctx.createAnalyser();
-    analyser.fftSize = 256;
+    if (!sourceRef.current) {
+      sourceRef.current =
+        audioCtxRef.current.createMediaElementSource(audio);
+      sourceRef.current.connect(analyserRef.current);
+      analyserRef.current.connect(audioCtxRef.current.destination);
+    }
 
-    source.connect(analyser);
-    analyser.connect(ctx.destination);
+    if (audioCtxRef.current.state === "suspended") {
+      audioCtxRef.current.resume();
+    }
+  };
 
-    analyserRef.current = analyser;
-    dataRef.current = new Uint8Array(new ArrayBuffer(analyser.frequencyBinCount));
+  // ---------------------------------------------
+  // 🔑 RE-ARM ON EVERY AUDIO PLAY (THIS WAS MISSING)
+  // ---------------------------------------------
+  useEffect(() => {
+    if (!audio) return;
+
+    const onPlay = () => {
+      rmsRef.current = 0; // reset envelope per utterance
+      ensureAudioPipeline();
+    };
+
+    audio.addEventListener("play", onPlay);
+    audio.addEventListener("playing", onPlay);
 
     return () => {
-      try {
-        source.disconnect();
-        analyser.disconnect();
-      } catch {}
-      analyserRef.current = null;
-      dataRef.current = null;
+      audio.removeEventListener("play", onPlay);
+      audio.removeEventListener("playing", onPlay);
     };
   }, [audio]);
 
-  // -----------------------------
-  // INIT
-  // -----------------------------
-  const init = (w: number, h: number) => {
-    const cx = w / 2;
-    const cy = h / 2;
-
-    particlesRef.current = Array.from({ length: 1400 }).map(() => {
-      const a = Math.random() * Math.PI * 2;
-      const r = Math.random() * 160;
-
-      return {
-        x: cx + Math.cos(a) * r,
-        y: cy + Math.sin(a) * r,
-        vx: 0,
-        vy: 0,
-        r: 0.7 + Math.random() * 0.8,
-
-        angle: Math.random() * Math.PI * 2,
-        radius: 2 + Math.random() * 6,
-        speed: 0.001 + Math.random() * 0.002,
-      };
-    });
-  };
-
-  // -----------------------------
+  // ---------------------------------------------
   // MAIN LOOP
-  // -----------------------------
+  // ---------------------------------------------
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -129,11 +127,11 @@ export default function AuroraPresence({
       canvas.style.height = `${h}px`;
 
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      init(w, h);
     };
 
     resize();
     window.addEventListener("resize", resize);
+    initParticles(900);
 
     const tick = () => {
       rafRef.current = requestAnimationFrame(tick);
@@ -143,103 +141,64 @@ export default function AuroraPresence({
       const cx = w / 2;
       const cy = h / 2;
 
-      ctx.fillStyle = "rgba(0,0,0,0.12)";
+      ctx.fillStyle = "rgba(0,0,0,0.18)";
       ctx.fillRect(0, 0, w, h);
 
-      // -----------------------------
-      // AUDIO ENERGY
-      // -----------------------------
-      let raw = 0;
-      if (analyserRef.current && dataRef.current) {
-        analyserRef.current.getByteFrequencyData(dataRef.current);
-        let sum = 0;
-        for (let i = 0; i < dataRef.current.length; i++) sum += dataRef.current[i];
-        raw = sum / dataRef.current.length / 255;
+      // breathing
+      breathRef.current += 0.01;
+      const breath = Math.sin(breathRef.current) * 0.03;
+
+      // rotation
+      rotationRef.current +=
+        state === "talking" ? 0.002 : 0.0008;
+
+      // ---- AUDIO RMS ----
+      let audioEnergy = 0;
+
+      if (state === "talking" && audio) {
+        ensureAudioPipeline();
+
+        if (analyserRef.current && dataRef.current) {
+          analyserRef.current.getByteTimeDomainData(dataRef.current);
+
+          let sum = 0;
+          for (let i = 0; i < dataRef.current.length; i++) {
+            const v = (dataRef.current[i] - 128) / 128;
+            sum += v * v;
+          }
+
+          const rms = Math.sqrt(sum / dataRef.current.length);
+          rmsRef.current += (rms - rmsRef.current) * 0.18;
+          audioEnergy = rmsRef.current;
+        }
+      } else {
+        rmsRef.current *= 0.92;
+        audioEnergy = rmsRef.current;
       }
 
-      const prev = smoothedEnergyRef.current;
-      smoothedEnergyRef.current =
-        raw > prev
-          ? prev + (raw - prev) * 0.22
-          : prev + (raw - prev) * 0.08;
+      const baseRadius = Math.min(w, h) * 0.32;
+      const voice = audioEnergy * 2.2;
 
-      const voiceEnergy = smoothedEnergyRef.current;
-
-      // -----------------------------
-      // GLOBAL HIVE MOTION
-      // -----------------------------
-      const time = performance.now();
-
-      // 🫁 breathing
-      const breathe =
-        stateRef.current === "idle"
-          ? Math.sin(time * 0.0006) * 12
-          : 0;
-
-      // 🌀 slow rotation
-      const rotation =
-        time * (0.00004 + voiceEnergy * 0.00025);
-
-      // 🎭 emotion deformation
-      const valence = emotionRef.current?.valence ?? 0.5;
-      const arousal = emotionRef.current?.arousal ?? 0.5;
-
-      const stretchX = 1 + (valence - 0.5) * 0.25;
-      const stretchY = 1 + (arousal - 0.5) * 0.35;
-
-      // -----------------------------
-      // PARTICLES
-      // -----------------------------
       for (const p of particlesRef.current) {
-        // individual micro motion
-        p.angle += p.speed;
-        const mx = Math.cos(p.angle) * p.radius;
-        const my = Math.sin(p.angle) * p.radius;
+        // micro jitter
+        p.jitterPhase += p.jitterAmp;
+        const jitter = Math.sin(p.jitterPhase) * 0.01;
 
-        // vector from center
-        const dx = p.x - cx;
-        const dy = p.y - cy;
+        // SPRING = FLUIDITY
+        const target = p.baseRadius + voice * 0.4;
+        p.vel += (target - p.radius) * 0.1;
+        p.vel *= 0.85;
+        p.radius += p.vel;
 
-        const dist = Math.sqrt(dx * dx + dy * dy) + 0.001;
-        const baseRadius = 140 + breathe + voiceEnergy * 220;
+        const r = baseRadius * (p.radius + breath + jitter);
+        const a = p.angle + rotationRef.current;
 
-        // cohesion toward volumetric mass
-        const targetRadius = baseRadius * (dist / baseRadius);
-        const pull = (targetRadius - dist) * 0.0012;
+        const x = cx + Math.cos(a) * r;
+        const y = cy + Math.sin(a) * r;
 
-        // rotation
-        const rx =
-          dx * Math.cos(rotation) - dy * Math.sin(rotation);
-        const ry =
-          dx * Math.sin(rotation) + dy * Math.cos(rotation);
-
-        // apply forces
-        p.vx += (rx / dist) * pull;
-        p.vy += (ry / dist) * pull;
-
-        // voice expansion
-        p.vx += (dx / dist) * voiceEnergy * 0.6;
-        p.vy += (dy / dist) * voiceEnergy * 0.6;
-
-        // integrate
-        p.x += p.vx + mx * 0.02;
-        p.y += p.vy + my * 0.02;
-
-        p.vx *= 0.96;
-        p.vy *= 0.96;
-
-        // draw
         ctx.beginPath();
-        ctx.arc(
-          cx + (p.x - cx) * stretchX,
-          cy + (p.y - cy) * stretchY,
-          p.r,
-          0,
-          Math.PI * 2
-        );
-        ctx.fillStyle = `rgba(160,220,255,${
-          0.07 + voiceEnergy * 0.45
-        })`;
+        ctx.arc(x, y, 1.1, 0, Math.PI * 2);
+        ctx.fillStyle = "rgba(140,220,255,0.35)";
         ctx.fill();
       }
     };
@@ -250,16 +209,14 @@ export default function AuroraPresence({
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
       window.removeEventListener("resize", resize);
     };
-  }, []);
+  }, [state, emotion, audio]);
 
   return (
     <div className="aurora-presence">
       <canvas ref={canvasRef} className="aurora-canvas" />
-      <div className="aurora-vignette" />
     </div>
   );
 }
-
 
 
 {/*

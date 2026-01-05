@@ -1,5 +1,4 @@
 // components/camera/RealTimeEmotionCamera.tsx
-
 // components/camera/RealTimeEmotionCamera.tsx
 "use client";
 
@@ -146,6 +145,19 @@ const RealTimeEmotionCamera = forwardRef<RealTimeEmotionCameraHandle, Props>(
       };
     };
 
+    // -------------------------------------------------------------
+    // ✅ ENSURE SINGLE SHARED AUDIO ELEMENT (DO NOT REPLACE)
+    // -------------------------------------------------------------
+    const ensureSharedAudio = () => {
+      if (!audioRef.current) {
+        const a = new Audio();
+        a.crossOrigin = "anonymous";
+        a.preload = "auto";
+        audioRef.current = a;
+      }
+      return audioRef.current;
+    };
+
     const stopAll = () => {
       stopEmotionPolling();
       conversationActiveRef.current = false;
@@ -155,11 +167,22 @@ const RealTimeEmotionCamera = forwardRef<RealTimeEmotionCameraHandle, Props>(
       if (s) s.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
 
-      // stop audio
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current.src = "";
-        audioRef.current = null;
+      // stop audio (DO NOT NULL OUT THE ELEMENT)
+      const a = audioRef.current;
+      if (a) {
+        a.pause();
+
+        // revoke old blob url to avoid leaks
+        const prevSrc = a.src;
+        if (prevSrc && prevSrc.startsWith("blob:")) {
+          try {
+            URL.revokeObjectURL(prevSrc);
+          } catch {}
+        }
+
+        a.src = "";
+        a.onended = null;
+        a.onplay = null;
       }
 
       isAuroraSpeakingRef.current = false;
@@ -172,8 +195,8 @@ const RealTimeEmotionCamera = forwardRef<RealTimeEmotionCameraHandle, Props>(
     const startCameraAndBoot = async () => {
       try {
         unlockAudio();
+        ensureSharedAudio();
 
-        // Camera stream (hidden video element)
         const stream = await navigator.mediaDevices.getUserMedia({
           video: { width: { ideal: 1280 }, height: { ideal: 720 } },
           audio: false,
@@ -189,14 +212,12 @@ const RealTimeEmotionCamera = forwardRef<RealTimeEmotionCameraHandle, Props>(
 
         videoElRef.current = hiddenVideo;
 
-        // Ensure metadata ready
         await new Promise<void>((resolve) => {
           hiddenVideo.onloadedmetadata = () => resolve();
         });
 
         await hiddenVideo.play().catch(() => {});
 
-        // greeting -> then name capture -> then polling + loop
         await playGreeting();
         window.setTimeout(() => startNameCapture(), 600);
       } catch (err) {
@@ -265,28 +286,44 @@ const RealTimeEmotionCamera = forwardRef<RealTimeEmotionCameraHandle, Props>(
     };
 
     // -------------------------------------------------------------
-    // AUDIO PLAY (shared)
+    // ✅ AUDIO PLAY (REUSE SHARED ELEMENT ALWAYS)
     // -------------------------------------------------------------
     const playAudioBlob = async (blob: Blob) => {
-      // Stop any previous audio
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current.src = "";
-        audioRef.current = null;
+      const a = ensureSharedAudio();
+
+      // stop any previous playback (DO NOT NULL)
+      a.pause();
+
+      // revoke previous blob url (if any)
+      const prevSrc = a.src;
+      if (prevSrc && prevSrc.startsWith("blob:")) {
+        try {
+          URL.revokeObjectURL(prevSrc);
+        } catch {}
       }
 
-      const audio = new Audio(URL.createObjectURL(blob));
-      audioRef.current = audio;
+      const url = URL.createObjectURL(blob);
+      a.src = url;
+      a.currentTime = 0;
 
       isAuroraSpeakingRef.current = true;
       onStateChange?.("talking");
 
-      audio.onended = () => {
+      a.onended = () => {
         isAuroraSpeakingRef.current = false;
         onStateChange?.("idle");
       };
 
-      await audio.play();
+      // wait until the element can play (helps analyzers + reliability)
+      if (a.readyState < 2) {
+        await new Promise<void>((resolve) => {
+          const done = () => resolve();
+          a.addEventListener("loadeddata", done, { once: true });
+          a.addEventListener("canplay", done, { once: true });
+        });
+      }
+
+      await a.play();
     };
 
     // -------------------------------------------------------------
@@ -346,7 +383,6 @@ const RealTimeEmotionCamera = forwardRef<RealTimeEmotionCameraHandle, Props>(
             stream.getTracks().forEach((t) => t.stop());
           }
 
-          // begin emotion loop + conversation loop
           startEmotionPolling();
           window.setTimeout(() => startAutoConversationLoop(), 800);
         };
@@ -355,7 +391,6 @@ const RealTimeEmotionCamera = forwardRef<RealTimeEmotionCameraHandle, Props>(
         window.setTimeout(() => rec.stop(), 2300);
       } catch (err) {
         console.error("Name capture error:", err);
-        // even if name fails, continue
         setGuestName("friend");
         setNameCaptured(true);
         startEmotionPolling();
@@ -401,7 +436,6 @@ const RealTimeEmotionCamera = forwardRef<RealTimeEmotionCameraHandle, Props>(
           const blob = new Blob(chunks, { type: "audio/webm" });
 
           if (blob.size > 2500) {
-            // fire and forget
             void sendToAurora(blob);
           }
 
@@ -418,10 +452,9 @@ const RealTimeEmotionCamera = forwardRef<RealTimeEmotionCameraHandle, Props>(
     };
 
     // -------------------------------------------------------------
-    // SEND TO AURORA (hard lock + pauses vision)
+    // SEND TO AURORA
     // -------------------------------------------------------------
     const sendToAurora = async (blob: Blob) => {
-      // 🔒 hard lock
       if (isAuroraSpeakingRef.current) return;
 
       stopEmotionPolling();
@@ -453,23 +486,18 @@ const RealTimeEmotionCamera = forwardRef<RealTimeEmotionCameraHandle, Props>(
         }
 
         const outBlob = await res.blob();
-
-        // play response audio + re-enable polling when done
-        // (playAudioBlob sets state + speaking)
         await playAudioBlob(outBlob);
 
-        // ensure polling resumes on end
         const a = audioRef.current;
         if (a) {
           const prev = a.onended;
           a.onended = (ev) => {
-            if (prev) prev.call(a, ev);
+            if (prev) prev.call(a, ev as any);
             isAuroraSpeakingRef.current = false;
             onStateChange?.("idle");
             startEmotionPolling();
           };
         } else {
-          // fallback
           isAuroraSpeakingRef.current = false;
           onStateChange?.("idle");
           startEmotionPolling();
@@ -482,7 +510,6 @@ const RealTimeEmotionCamera = forwardRef<RealTimeEmotionCameraHandle, Props>(
       }
     };
 
-    // headless component
     return null;
   }
 );
