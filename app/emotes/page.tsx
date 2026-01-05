@@ -1,6 +1,43 @@
 "use client";
 
 import Nav from "@/components/nav/Nav";
+import AuroraPlayer from "@/components/avatar/AuroraPlayer";
+
+export default function EmotesPage() {
+  return (
+    <div
+      className="bg-dark text-light"
+      style={{
+        minHeight: "100vh",
+        display: "flex",
+        flexDirection: "column",
+      }}
+    >
+      <Nav />
+
+      <main
+        style={{
+          flex: 1,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "2.5rem 1rem",
+        }}
+      >
+        {/* Aurora is the focal point */}
+        <div style={{ width: "100%", maxWidth: 1100 }}>
+          <AuroraPlayer />
+        </div>
+      </main>
+    </div>
+  );
+}
+
+
+{/*
+"use client";
+
+import Nav from "@/components/nav/Nav";
 import AuroraController from "@/components/avatar/AuroraController";
 
 export default function EmotesPage() {
@@ -32,7 +69,7 @@ export default function EmotesPage() {
   );
 }
 
-
+*/}
 
 {/*
 // app/emotes/page.tsx
