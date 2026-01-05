@@ -13,6 +13,7 @@ export default function AuroraController() {
   const [state, setState] = useState<AuroraState>("idle");
   const [emotion, setEmotion] = useState<EmotionPayload | null>(null);
 
+  // AUDIO IS OWNED BY RealTimeEmotionCamera
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const cameraRef = useRef<RealTimeEmotionCameraHandle | null>(null);
 
@@ -26,10 +27,14 @@ export default function AuroraController() {
 
   return (
     <div style={{ width: "100%", maxWidth: 1000, margin: "0 auto" }}>
-      {/* VISUAL = PARTICLES ONLY */}
-      <AuroraPresence state={state} emotion={emotion} audio={audioRef.current} />
+      {/* VISUALS */}
+      <AuroraPresence
+        state={state}
+        emotion={emotion}
+        audio={audioRef.current}
+      />
 
-      {/* CONTROLS (you can style however you want) */}
+      {/* CONTROLS */}
       <div
         style={{
           marginTop: 16,
@@ -51,20 +56,18 @@ export default function AuroraController() {
           Stop
         </button>
 
-        <span style={{ opacity: 0.85 }}>
-          State: <b>{state}</b>{" "}
+        <span>
+          State: <b>{state}</b>
           {emotion?.emotion ? (
             <>
-              | Emotion: <b>{emotion.emotion}</b>{" "}
-              {typeof emotion.confidence === "number" ? (
-                <>({Math.round(emotion.confidence * 100)}%)</>
-              ) : null}
+              {" "}
+              | Emotion: <b>{emotion.emotion}</b>
             </>
           ) : null}
         </span>
       </div>
 
-      {/* HEADLESS LOGIC ONLY */}
+      {/* HEADLESS LOGIC */}
       <RealTimeEmotionCamera
         ref={cameraRef}
         onEmotion={setEmotion}
