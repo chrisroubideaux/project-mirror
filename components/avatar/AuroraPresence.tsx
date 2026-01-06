@@ -1,5 +1,3 @@
-// components/avatar/AuroraPresence.tsx
-// components/avatar/AuroraPresence.tsx
 "use client";
 
 import { useEffect, useRef } from "react";
@@ -324,6 +322,8 @@ export default function AuroraPresence({
     </div>
   );
 }
+
+
 
 
 {/*

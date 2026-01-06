@@ -9,6 +9,7 @@ import '@/styles/card.css';
 import '@/styles/about.css';
 import '@/styles/aurora.css';
 
+
 const barlowCondensed = Barlow_Condensed({
   weight: ["400"],     // THIN
   subsets: ["latin"],
