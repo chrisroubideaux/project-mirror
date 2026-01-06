@@ -128,3 +128,40 @@
     inset 0 0 0 1px rgba(255, 255, 255, 0.18),
     0 0 18px rgba(255, 90, 120, 0.4);
 }
+/* ============================= */
+/* MOBILE RESPONSIVENESS         */
+/* ============================= */
+
+@media (max-width: 768px) {
+  .aurora-player {
+    gap: 6px;
+  }
+
+  .aurora-player__screen {
+    aspect-ratio: 16 / 9;
+    max-height: 240px;
+    border-radius: 14px;
+  }
+
+  .aurora-player__controls {
+    padding: 8px 10px;
+    gap: 10px;
+  }
+
+  .aurora-btn {
+    height: 40px;
+    padding: 0 18px;
+    font-size: 0.75rem;
+  }
+
+  .aurora-btn__icon {
+    font-size: 0.8rem;
+  }
+}
+
+/* extra small phones */
+@media (max-width: 420px) {
+  .aurora-player__screen {
+    max-height: 200px;
+  }
+}
