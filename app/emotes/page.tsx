@@ -6,29 +6,21 @@ import AuroraPresence from "@/components/avatar/AuroraPresence";
 
 export default function Emotes() {
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        display: "flex",
-        flexDirection: "column",
-      }}
-    >
-      <Nav />
-
+    <>
+     <Nav />
+  
       <main
         style={{
-          flex: 1,
           display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
+          flexDirection: "column",
+         // alignItems: "center",
           padding: "2.5rem 1rem",
         }}
       >
-        {/* Aurora is the focal point */}
         <div >
           <AuroraPresence />
         </div>
       </main>
-    </div>
+    </>
   );
 }
