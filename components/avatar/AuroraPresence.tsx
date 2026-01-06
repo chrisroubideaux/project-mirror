@@ -1,10 +1,20 @@
+// components/avatar/AuroraPresence.tsx
 "use client";
 
-import { useEffect, useRef } from "react";
-import type {
+import { useEffect, useRef, useState } from "react";
+import { motion } from "framer-motion";
+
+import RealTimeEmotionCamera, {
   AuroraState,
   EmotionPayload,
+  RealTimeEmotionCameraHandle,
 } from "@/components/camera/RealTimeEmotionCamera";
+import { FaPlay, FaStop } from "react-icons/fa";
+
+
+/* ============================= */
+/* TYPES + HELPERS               */
+/* ============================= */
 
 type Particle = {
   angle: number;
@@ -16,34 +26,44 @@ type Particle = {
 
 const clamp = (v: number, a: number, b: number) =>
   Math.max(a, Math.min(b, v));
+
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 const smoothstep = (t: number) => t * t * (3 - 2 * t);
 
-// smooth noise
+/* ---------- Smooth noise ---------- */
+
 function hash1(n: number) {
   const s = Math.sin(n) * 43758.5453123;
   return s - Math.floor(s);
 }
+
 function noise1(x: number) {
   const i = Math.floor(x);
   const f = x - i;
   return lerp(hash1(i), hash1(i + 1), smoothstep(f));
 }
 
-export default function AuroraPresence({
-  state,
-  emotion,
-  audio,
-}: {
-  state: AuroraState;
-  emotion: EmotionPayload | null;
-  audio: HTMLAudioElement | null;
-}) {
+/* ============================= */
+/* AURORA PRESENCE (STANDALONE)  */
+/* ============================= */
+
+export default function AuroraPresence() {
+  /* ---------- STATE ---------- */
+
+  const [state, setState] = useState<AuroraState>("idle");
+  const [emotion, setEmotion] = useState<EmotionPayload | null>(null);
+
+  /* ---------- REFS ---------- */
+
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const particlesRef = useRef<Particle[]>([]);
   const rafRef = useRef<number | null>(null);
 
-  // audio
+  const cameraRef = useRef<RealTimeEmotionCameraHandle | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  /* ---------- AUDIO ---------- */
+
   const audioCtxRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const sourceRef = useRef<MediaElementAudioSourceNode | null>(null);
@@ -53,15 +73,30 @@ export default function AuroraPresence({
   const envSlow = useRef(0);
   const envSmooth = useRef(0);
 
-  // motion
+  /* ---------- MOTION ---------- */
+
   const rotation = useRef(0);
   const time = useRef(0);
 
-  // state transitions
   const prevState = useRef<AuroraState>("idle");
   const talkStart = useRef(0);
 
-  // ---------------- INIT ----------------
+  /* ============================= */
+  /* CONTROLS LOGIC                */
+  /* ============================= */
+
+  const start = async () => {
+    await cameraRef.current?.startSession();
+  };
+
+  const stop = () => {
+    cameraRef.current?.stopSession();
+  };
+
+  /* ============================= */
+  /* INIT PARTICLES                */
+  /* ============================= */
+
   const initParticles = (count: number) => {
     particlesRef.current = Array.from({ length: count }).map(() => {
       const r = Math.sqrt(Math.random());
@@ -75,23 +110,29 @@ export default function AuroraPresence({
     });
   };
 
+  /* ============================= */
+  /* AUDIO SETUP                   */
+  /* ============================= */
+
   const ensureAudio = () => {
+    const audio = audioRef.current;
     if (!audio || audio.readyState < 2) return;
+
     if (!audioCtxRef.current) audioCtxRef.current = new AudioContext();
 
     if (!analyserRef.current) {
-      const a = audioCtxRef.current.createAnalyser();
-      a.fftSize = 1024;
-      a.smoothingTimeConstant = 0.85;
-      analyserRef.current = a;
-      dataRef.current = new Uint8Array(a.fftSize);
+      const analyser = audioCtxRef.current.createAnalyser();
+      analyser.fftSize = 1024;
+      analyser.smoothingTimeConstant = 0.85;
+      analyserRef.current = analyser;
+      dataRef.current = new Uint8Array(analyser.fftSize);
     }
 
     if (!sourceRef.current) {
       sourceRef.current =
         audioCtxRef.current.createMediaElementSource(audio);
       sourceRef.current.connect(analyserRef.current);
-      analyserRef.current.connect(audioCtxRef.current.destination);
+      analyserRef.current!.connect(audioCtxRef.current.destination);
     }
 
     if (audioCtxRef.current.state === "suspended") {
@@ -99,38 +140,56 @@ export default function AuroraPresence({
     }
   };
 
+  /* ============================= */
+  /* AUDIO RESET ON PLAY           */
+  /* ============================= */
+
   useEffect(() => {
+    const audio = audioRef.current;
     if (!audio) return;
+
     const kick = () => {
       envFast.current = 0;
       envSlow.current = 0;
       envSmooth.current = 0;
       ensureAudio();
     };
+
     audio.addEventListener("play", kick);
     return () => audio.removeEventListener("play", kick);
-  }, [audio]);
+  }, []);
 
-  // ---------------- MAIN LOOP ----------------
+  /* ============================= */
+  /* MAIN RENDER LOOP              */
+  /* ============================= */
+
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
+
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
     const resize = () => {
-      const w = canvas.parentElement?.clientWidth ?? 800;
-      const h = 420;
+      const parent = canvas.parentElement;
+      if (!parent) return;
+
+      const w = parent.clientWidth;
+      const h = parent.clientHeight;
       const dpr = window.devicePixelRatio || 1;
-      canvas.width = w * dpr;
-      canvas.height = h * dpr;
+
+      canvas.width = Math.floor(w * dpr);
+      canvas.height = Math.floor(h * dpr);
+
       canvas.style.width = `${w}px`;
       canvas.style.height = `${h}px`;
+
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     };
 
     resize();
     window.addEventListener("resize", resize);
+
     initParticles(900);
 
     const tick = () => {
@@ -148,9 +207,8 @@ export default function AuroraPresence({
         prevState.current = state;
       }
 
-      // -------- AUDIO --------
       let rms = 0;
-      if (state === "talking" && audio) {
+      if (state === "talking") {
         ensureAudio();
         if (analyserRef.current && dataRef.current) {
           analyserRef.current.getByteTimeDomainData(dataRef.current);
@@ -178,14 +236,12 @@ export default function AuroraPresence({
       const valence = emotion?.valence ?? 0.5;
       const dominance = emotion?.dominance ?? 0.5;
 
-      // hesitation
-      const hes = smoothstep(
+      const hesitation = smoothstep(
         state === "talking"
           ? clamp((performance.now() - talkStart.current) / 260, 0, 1)
           : 0
       );
 
-      // -------- BACKGROUND --------
       const hueBase = 190 + valence * 60;
       const breathe = Math.sin(time.current * 0.4) * 8;
       const hue = hueBase + breathe;
@@ -198,6 +254,7 @@ export default function AuroraPresence({
         cy,
         Math.max(w, h)
       );
+
       bg.addColorStop(0, `hsla(${hue},70%,55%,0.25)`);
       bg.addColorStop(0.5, `hsla(${hue - 30},55%,30%,0.35)`);
       bg.addColorStop(1, `hsla(${hue - 60},40%,10%,0.45)`);
@@ -205,28 +262,11 @@ export default function AuroraPresence({
       ctx.fillStyle = bg;
       ctx.fillRect(0, 0, w, h);
 
-      // -------- THINKING PAUSE GLOW --------
-      if (state !== "talking" && energy < 0.05) {
-        const glowR = Math.min(w, h) * (0.18 + energy * 0.4);
-        ctx.save();
-        ctx.globalCompositeOperation = "lighter";
-        const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, glowR);
-        g.addColorStop(0, `hsla(${hue + 20},80%,70%,0.18)`);
-        g.addColorStop(1, `hsla(${hue + 20},80%,70%,0)`);
-        ctx.fillStyle = g;
-        ctx.beginPath();
-        ctx.arc(cx, cy, glowR, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
-      }
-
-      // -------- MOTION BIASES (emotion-specific) --------
       rotation.current +=
         (state === "talking" ? 0.0012 : 0.0005) *
         (0.8 + dominance * 0.6);
 
       const baseR = Math.min(w, h) * 0.32;
-
       const inwardPull =
         state === "talking" ? 0 : -0.08 * (1 - energy);
 
@@ -238,21 +278,19 @@ export default function AuroraPresence({
 
       const omega =
         state === "talking"
-          ? lerp(0.975, 0.955, hes)
+          ? lerp(0.975, 0.955, hesitation)
           : 0.99;
 
       const c1 = 0.035;
       const c2 =
         state === "talking"
-          ? lerp(0.015, 0.055, hes) * (0.8 + dominance * 0.6)
+          ? lerp(0.015, 0.055, hesitation) *
+            (0.8 + dominance * 0.6)
           : 0.015;
 
-      const turbAmp =
-        0.006 * (0.25 + arousal * 1.2);
-
+      const turbAmp = 0.006 * (0.25 + arousal * 1.2);
       const breath = Math.sin(time.current * 1.2) * 0.018;
 
-      // -------- PARTICLES --------
       ctx.save();
       ctx.globalCompositeOperation = "lighter";
 
@@ -264,7 +302,7 @@ export default function AuroraPresence({
           0.00012 +
           (energy + syllable) *
             (0.0004 + dominance * 0.0003) *
-            hes;
+            hesitation;
 
         p.vel =
           omega * p.vel +
@@ -281,7 +319,6 @@ export default function AuroraPresence({
         const x = cx + Math.cos(a) * r;
         const y = cy + Math.sin(a) * r;
 
-        // color split
         const particleHue =
           hue +
           (valence - 0.5) * 40 +
@@ -293,13 +330,11 @@ export default function AuroraPresence({
           0.65
         );
 
-        // bloom
         ctx.beginPath();
         ctx.arc(x, y, 2.8, 0, Math.PI * 2);
         ctx.fillStyle = `hsla(${particleHue},85%,65%,${alpha * 0.12})`;
         ctx.fill();
 
-        // core
         ctx.beginPath();
         ctx.arc(x, y, 1.1, 0, Math.PI * 2);
         ctx.fillStyle = `hsla(${particleHue},75%,60%,${alpha})`;
@@ -310,20 +345,84 @@ export default function AuroraPresence({
     };
 
     tick();
+
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
       window.removeEventListener("resize", resize);
     };
-  }, [state, emotion, audio]);
+  }, [state, emotion]);
+
+  /* ============================= */
+  /* RENDER (VIDEO PLAYER UI)     */
+  /* ============================= */
 
   return (
-    <div className="aurora-presence">
-      <canvas ref={canvasRef} className="aurora-canvas" />
+    <div className="aurora-player">
+      <div className="aurora-player__screen aurora-presence">
+        <canvas ref={canvasRef} className="aurora-canvas" />
+        <div className="aurora-vignette" />
+
+        <div className="aurora-player__overlay">
+          {state === "talking" && (
+            <span className="aurora-player__live">LIVE</span>
+          )}
+        </div>
+      </div>
+
+      <div className="aurora-controls mt-3">
+        <AuroraButton onClick={start} glow>
+          <FaPlay className="aurora-btn__icon" />
+          <span className="m-1">Begin</span>
+        </AuroraButton>
+
+        <AuroraButton onClick={stop} danger>
+          <FaStop className="aurora-btn__icon" />
+          <span className="m-1">End</span>
+        </AuroraButton>
+      </div>
+
+      {/* HEADLESS CAMERA */}
+      <RealTimeEmotionCamera
+        ref={cameraRef}
+        onEmotion={setEmotion}
+        onStateChange={setState}
+        audioRef={audioRef}
+      />
     </div>
   );
 }
 
+/* ============================= */
+/* AURORA PILL BUTTON            */
+/* ============================= */
 
+function AuroraButton({
+  children,
+  onClick,
+  glow,
+  danger,
+}: {
+  children: React.ReactNode;
+  onClick: () => void;
+  glow?: boolean;
+  danger?: boolean;
+}) {
+  return (
+    <motion.button
+      type="button"
+      onClick={onClick}
+      whileHover={{ scale: 1.03 }}
+      whileTap={{ scale: 0.95 }}
+      className={[
+        "aurora-btn",
+        glow ? "aurora-btn--glow" : "",
+        danger ? "aurora-btn--danger" : "",
+      ].join(" ")}
+    >
+      {children}
+    </motion.button>
+  );
+}
 
 
 {/*
