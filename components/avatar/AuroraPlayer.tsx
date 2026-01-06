@@ -11,19 +11,8 @@ import RealTimeEmotionCamera, {
   RealTimeEmotionCameraHandle,
 } from "@/components/camera/RealTimeEmotionCamera";
 
-/**
- * AuroraPlayer.tsx
- * - Fullscreen toggle (native Fullscreen API)
- * - Overlay controls (Begin / End / Fullscreen)
- * - Animated control fade-in/out
- * - "Hover to reveal controls" (Netflix-ish)
- * - Cinematic fullscreen transitions
- * - Emotion-weighted glow when fullscreen (valence/arousal drive)
- *
- * Notes:
- * - Aurora is a "session" (Begin/End), not a video (no pause).
- * - RealTimeEmotionCamera remains headless and is embedded here.
- */
+
+
 export default function AuroraPlayer() {
   const prefersReducedMotion = useReducedMotion();
 
@@ -118,11 +107,9 @@ export default function AuroraPlayer() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+ 
   // ----------------------------
-  // Netflix-ish controls reveal/hide
-  // - Always visible when not fullscreen
-  // - In fullscreen: reveal on mouse move / hover; auto-hide after idle
-  // ----------------------------
+  
   const clearHideTimer = () => {
     if (hideTimerRef.current) {
       window.clearTimeout(hideTimerRef.current);
