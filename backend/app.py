@@ -18,6 +18,12 @@ from extensions import db, jwt
 
 # Models (needed for migrations)
 from users.models import User, EmotionalProfile, FaceEmbedding
+from videos.models import Video
+
+# Admin routes
+from admin.routes import admin_bp
+# Admin routes
+from admin.routes import admin_bp
 
 # User/Auth routes
 from users.routes import user_bp
@@ -27,6 +33,10 @@ from users.oauth import oauth_bp
 from routes.aurora_routes import aurora_bp
 from routes.emotion_routes import emotion_bp   # Keep
 from routes.whisper_routes import whisper_bp
+
+# Video routes
+from videos import videos_bp
+
 
 # Migration manager
 migrate = Migrate()
@@ -74,11 +84,14 @@ def create_app():
     # ----------------------------------------------------
     # Register Blueprints
     # ----------------------------------------------------
+    app.register_blueprint(admin_bp)
     app.register_blueprint(user_bp)      # /api/users/*
     app.register_blueprint(oauth_bp)     # /auth/*
     app.register_blueprint(emotion_bp)   # /api/emotion/*
     app.register_blueprint(aurora_bp)    # /api/aurora/*
     app.register_blueprint(whisper_bp)   # /api/whisper/*   <-- FIXED
+    app.register_blueprint(videos_bp)
+
 
     # ----------------------------------------------------
     # Health Check
