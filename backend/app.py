@@ -1,6 +1,5 @@
 # backend/app.py
 
-
 from dotenv import load_dotenv
 load_dotenv()   # MUST BE FIRST
 
@@ -13,32 +12,40 @@ from flask_migrate import Migrate
 # Ensure imports work when running from root
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
+# ----------------------------------------------------
 # Extensions
+# ----------------------------------------------------
 from extensions import db, jwt
 
-# Models (needed for migrations)
+# ----------------------------------------------------
+# Models (needed for migrations / Alembic discovery)
+# ----------------------------------------------------
 from users.models import User, EmotionalProfile, FaceEmbedding
+from admin.models import Admin
 from videos.models import Video
 
-# Admin routes
+# ----------------------------------------------------
+# Blueprints
+# ----------------------------------------------------
+# Admin
 from admin.routes import admin_bp
-# Admin routes
-from admin.routes import admin_bp
+from admin.oauth import admin_oauth_bp
 
-# User/Auth routes
+# Users
 from users.routes import user_bp
 from users.oauth import oauth_bp
 
-# Aurora + Emotion
+# Core services
 from routes.aurora_routes import aurora_bp
-from routes.emotion_routes import emotion_bp   # Keep
+from routes.emotion_routes import emotion_bp
 from routes.whisper_routes import whisper_bp
 
-# Video routes
+# Videos
 from videos import videos_bp
 
-
+# ----------------------------------------------------
 # Migration manager
+# ----------------------------------------------------
 migrate = Migrate()
 
 
@@ -49,16 +56,10 @@ def create_app():
     # ----------------------------------------------------
     # CORS
     # ----------------------------------------------------
-    ALLOWED_ORIGINS = [
-        os.getenv("FRONTEND_URL", "http://localhost:3000").rstrip("/"),
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-    ]
-
     CORS(
         app,
         resources={r"/api/*": {"origins": "*"}},
-        methods=["GET", "POST", "OPTIONS"],
+        methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
         allow_headers=["Content-Type", "Authorization"],
     )
 
@@ -84,14 +85,21 @@ def create_app():
     # ----------------------------------------------------
     # Register Blueprints
     # ----------------------------------------------------
-    app.register_blueprint(admin_bp)
-    app.register_blueprint(user_bp)      # /api/users/*
-    app.register_blueprint(oauth_bp)     # /auth/*
-    app.register_blueprint(emotion_bp)   # /api/emotion/*
-    app.register_blueprint(aurora_bp)    # /api/aurora/*
-    app.register_blueprint(whisper_bp)   # /api/whisper/*   <-- FIXED
-    app.register_blueprint(videos_bp)
+    # Admin
+    app.register_blueprint(admin_bp)        # /api/admins/*
+    app.register_blueprint(admin_oauth_bp)  # /auth/admin/*
 
+    # Users
+    app.register_blueprint(user_bp)         # /api/users/*
+    app.register_blueprint(oauth_bp)        # /auth/*
+
+    # Core services
+    app.register_blueprint(emotion_bp)      # /api/emotion/*
+    app.register_blueprint(aurora_bp)       # /api/aurora/*
+    app.register_blueprint(whisper_bp)      # /api/whisper/*
+
+    # Videos
+    app.register_blueprint(videos_bp)       # /api/videos/*
 
     # ----------------------------------------------------
     # Health Check
