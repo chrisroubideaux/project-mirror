@@ -12,35 +12,51 @@ class User(db.Model):
     """
     __tablename__ = "users"
 
+    # --------------------------------------------------
+    # Primary Key
+    # --------------------------------------------------
     id = db.Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
 
+    # --------------------------------------------------
     # Basic identity / auth
+    # --------------------------------------------------
     full_name = db.Column(db.String(100), nullable=True)
     email = db.Column(db.String(120), unique=True, index=True, nullable=True)
     password_hash = db.Column(db.String(512), nullable=True)  # optional if OAuth-only
     profile_image_url = db.Column(db.String(255), nullable=True)
 
+    # --------------------------------------------------
     # OAuth identity
-    oauth_provider = db.Column(db.String(50), nullable=True)  # "google", "facebook", etc.
+    # --------------------------------------------------
+    oauth_provider = db.Column(db.String(50), nullable=True)  # google | facebook
     oauth_id = db.Column(db.String(255), nullable=True, index=True)
 
+    # --------------------------------------------------
     # Privacy flags
-    is_anonymous_user = db.Column(db.Boolean, default=False)            # guest mode
-    allow_emotion_logging = db.Column(db.Boolean, default=True)        # store emotional history?
-    allow_face_storage = db.Column(db.Boolean, default=True)           # store face embedding?
+    # --------------------------------------------------
+    is_anonymous_user = db.Column(db.Boolean, default=False)
+    allow_emotion_logging = db.Column(db.Boolean, default=True)
+    allow_face_storage = db.Column(db.Boolean, default=True)
 
+    # --------------------------------------------------
     # Aurora relationship & tone
-    relationship_stage = db.Column(db.String(50), default="new")       # new, learning, bonding, trusted, deep
-    preferred_tone = db.Column(db.String(50), default="gentle")        # gentle, reflective, analytical, supportive
+    # --------------------------------------------------
+    relationship_stage = db.Column(db.String(50), default="new")
+    preferred_tone = db.Column(db.String(50), default="gentle")
 
-    comfort_level_score = db.Column(db.Float, default=0.0)             # 0–1
-    openness_level_score = db.Column(db.Float, default=0.0)            # 0–1
+    comfort_level_score = db.Column(db.Float, default=0.0)
+    openness_level_score = db.Column(db.Float, default=0.0)
 
-    # Timestamps
+    # --------------------------------------------------
+    # Activity timestamps
+    # --------------------------------------------------
     last_login_at = db.Column(db.DateTime, nullable=True)
     last_face_login_at = db.Column(db.DateTime, nullable=True)
     last_emotion_analysis_at = db.Column(db.DateTime, nullable=True)
 
+    # --------------------------------------------------
+    # System timestamps
+    # --------------------------------------------------
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(
         db.DateTime,
@@ -48,7 +64,9 @@ class User(db.Model):
         onupdate=datetime.utcnow
     )
 
+    # --------------------------------------------------
     # Relationships
+    # --------------------------------------------------
     emotional_profile = db.relationship(
         "EmotionalProfile",
         uselist=False,
@@ -56,17 +74,17 @@ class User(db.Model):
         cascade="all, delete-orphan"
     )
 
+    # ✅ Relationship ONLY — model lives in backend/face/models.py
     face_embeddings = db.relationship(
         "FaceEmbedding",
         back_populates="user",
         cascade="all, delete-orphan"
     )
 
+    # --------------------------------------------------
+    # Serialization
+    # --------------------------------------------------
     def to_public_dict(self):
-        """
-        Public-safe shape for frontend + Aurora.
-        Emotional profile is flattened into a nested dict for convenience.
-        """
         profile = self.emotional_profile
 
         return {
@@ -85,7 +103,10 @@ class User(db.Model):
 
             "last_login_at": self.last_login_at.isoformat() if self.last_login_at else None,
             "last_face_login_at": self.last_face_login_at.isoformat() if self.last_face_login_at else None,
-            "last_emotion_analysis_at": self.last_emotion_analysis_at.isoformat() if self.last_emotion_analysis_at else None,
+            "last_emotion_analysis_at": (
+                self.last_emotion_analysis_at.isoformat()
+                if self.last_emotion_analysis_at else None
+            ),
 
             "emotional_profile": {
                 "baseline_emotion_vector": profile.baseline_emotion_vector if profile else None,
@@ -110,26 +131,31 @@ class User(db.Model):
 class EmotionalProfile(db.Model):
     """
     Long-term emotional traits, patterns, and crisis flags.
-    Separated from User so the core table stays slimmer.
     """
     __tablename__ = "emotional_profiles"
 
     id = db.Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id = db.Column(UUID(as_uuid=True), db.ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False)
+
+    user_id = db.Column(
+        UUID(as_uuid=True),
+        db.ForeignKey("users.id", ondelete="CASCADE"),
+        unique=True,
+        nullable=False
+    )
 
     # Baseline / patterns
-    baseline_emotion_vector = db.Column(JSONB, nullable=True)       # e.g. {"neutral": 0.6, "sad": 0.2, ...}
-    common_microexpressions = db.Column(JSONB, nullable=True)       # e.g. {"brow_raise": 0.4, ...}
-    average_gaze_pattern = db.Column(JSONB, nullable=True)          # e.g. {"center": 0.7, "down": 0.2, ...}
+    baseline_emotion_vector = db.Column(JSONB, nullable=True)
+    common_microexpressions = db.Column(JSONB, nullable=True)
+    average_gaze_pattern = db.Column(JSONB, nullable=True)
 
     # Stress / variability
-    stress_indicator_level = db.Column(db.Float, default=0.0)       # 0–1
-    mood_variability_score = db.Column(db.Float, default=0.0)       # 0–1 range – how volatile moods are
-    daily_mood_streak = db.Column(db.Integer, default=0)         
+    stress_indicator_level = db.Column(db.Float, default=0.0)
+    mood_variability_score = db.Column(db.Float, default=0.0)
+    daily_mood_streak = db.Column(db.Integer, default=0)
 
     last_emotional_shift_at = db.Column(db.DateTime, nullable=True)
 
-    # Safety / crisis tracking
+    # Crisis tracking
     crisis_count = db.Column(db.Integer, default=0)
     last_crisis_flag_at = db.Column(db.DateTime, nullable=True)
 
@@ -141,25 +167,3 @@ class EmotionalProfile(db.Model):
     )
 
     user = db.relationship("User", back_populates="emotional_profile")
-
-
-class FaceEmbedding(db.Model):
-    """
-    Stores face embeddings for biometric login and calibration of emotional baselines.
-    """
-    __tablename__ = "face_embeddings"
-
-    id = db.Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id = db.Column(UUID(as_uuid=True), db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-
-    # Model + embedding payload
-    provider = db.Column(db.String(100), nullable=True)       # e.g. "insightface", "hf/arcface"
-    embedding = db.Column(JSONB, nullable=False)              # store vector as JSON array of floats
-    embedding_dim = db.Column(db.Integer, nullable=False)
-
-    # Metadata
-    is_active = db.Column(db.Boolean, default=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    last_seen_at = db.Column(db.DateTime, nullable=True)
-
-    user = db.relationship("User", back_populates="face_embeddings")

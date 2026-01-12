@@ -1,14 +1,17 @@
 # backend/users/routes.py
+from extensions import db
 from uuid import uuid4
 from datetime import datetime
 from flask import request, jsonify
 from werkzeug.security import generate_password_hash, check_password_hash
 from . import user_bp
-from .models import User, EmotionalProfile, FaceEmbedding, db
+from gcs_client import upload_file_to_gcs
+from .models import User, EmotionalProfile
+from face.models import FaceEmbedding
 from utils.decorators import token_required
 from utils.jwt_token import generate_jwt_token
 from gcs_client import upload_file_to_gcs 
-
+import traceback
 
 # ---------------------------------------------------------
 # Helper: Normalize user

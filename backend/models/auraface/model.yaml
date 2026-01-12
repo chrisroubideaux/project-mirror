@@ -1,0 +1,7 @@
+package: auraface
+files:
+  detection: scrfd_10g_bnkps.onnx
+  landmark_2d_106: 2d106det.onnx
+  landmark_3d_68: 1k3d68.onnx
+  recognition: glintr100.onnx
+  genderage: genderage.onnx
