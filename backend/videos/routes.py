@@ -1,16 +1,16 @@
 # backend/videos/routes.py
+# backend/videos/routes.py
 
 from datetime import datetime
 
 from flask import Blueprint, jsonify, request
-from flask_jwt_extended import (
-    verify_jwt_in_request,
-    get_jwt,
-    get_jwt_identity,
-)
 
 from extensions import db
 from .models import Video
+
+# Auth decorators (YOUR custom JWT system)
+from utils.decorators import token_required
+from admin.decorators import admin_token_required
 
 
 videos_bp = Blueprint(
@@ -18,22 +18,6 @@ videos_bp = Blueprint(
     __name__,
     url_prefix="/api/videos"
 )
-
-# =====================================================
-# HELPERS (LOCAL, SIMPLE)
-# =====================================================
-
-def login_required():
-    verify_jwt_in_request()
-
-
-def admin_required():
-    verify_jwt_in_request()
-    claims = get_jwt()
-    if claims.get("role") != "admin":
-        return False
-    return True
-
 
 # =====================================================
 # PUBLIC ROUTES (NO AUTH)
@@ -47,7 +31,6 @@ def get_public_videos():
         .order_by(Video.created_at.desc())
         .all()
     )
-
     return jsonify([v.to_dict() for v in videos]), 200
 
 
@@ -62,13 +45,14 @@ def get_public_video(video_id):
 
 
 # =====================================================
-# MEMBER ROUTES (USER OR ADMIN JWT)
+# MEMBER ROUTES (USER JWT ONLY)
+# - Users can see public + private videos.
+# - Admins can use /admin endpoints instead.
 # =====================================================
 
 @videos_bp.route("/member", methods=["GET"])
-def get_member_videos():
-    login_required()
-
+@token_required
+def get_member_videos(current_user):
     videos = (
         Video.query
         .filter(
@@ -83,14 +67,14 @@ def get_member_videos():
 
 
 @videos_bp.route("/member/<uuid:video_id>", methods=["GET"])
-def get_member_video(video_id):
-    login_required()
-
+@token_required
+def get_member_video(current_user, video_id):
     video = Video.query.get(video_id)
 
     if not video or not video.is_active:
         return jsonify({"error": "Video not found"}), 404
 
+    # Members can view public + private
     if video.visibility in ("public", "private"):
         return jsonify(video.to_dict()), 200
 
@@ -98,22 +82,18 @@ def get_member_video(video_id):
 
 
 # =====================================================
-# ADMIN ROUTES (ROLE = admin)
+# ADMIN ROUTES (ADMIN JWT ONLY)
 # =====================================================
 
 @videos_bp.route("/admin", methods=["POST"])
-def create_video():
-    if not admin_required():
-        return jsonify({"error": "Admin access required"}), 403
-
+@admin_token_required
+def create_video(current_admin):
     data = request.get_json() or {}
 
     required = ["title", "poster_url", "video_url"]
     for field in required:
-        if field not in data:
+        if not data.get(field):
             return jsonify({"error": f"Missing field: {field}"}), 400
-
-    admin_id = get_jwt_identity()
 
     video = Video(
         title=data["title"],
@@ -125,7 +105,7 @@ def create_video():
         aspect_ratio=data.get("aspect_ratio", "16:9"),
         type=data.get("type", "episode"),
         visibility=data.get("visibility", "private"),
-        created_by=admin_id
+        created_by=current_admin.id,
     )
 
     db.session.add(video)
@@ -135,10 +115,8 @@ def create_video():
 
 
 @videos_bp.route("/admin", methods=["GET"])
-def get_all_videos_admin():
-    if not admin_required():
-        return jsonify({"error": "Admin access required"}), 403
-
+@admin_token_required
+def get_all_videos_admin(current_admin):
     videos = (
         Video.query
         .order_by(Video.created_at.desc())
@@ -148,12 +126,22 @@ def get_all_videos_admin():
     return jsonify([v.to_dict(admin_view=True) for v in videos]), 200
 
 
-@videos_bp.route("/admin/<uuid:video_id>", methods=["PUT"])
-def update_video(video_id):
-    if not admin_required():
-        return jsonify({"error": "Admin access required"}), 403
+@videos_bp.route("/admin/<uuid:video_id>", methods=["GET"])
+@admin_token_required
+def get_video_admin(current_admin, video_id):
+    video = Video.query.get(video_id)
+    if not video:
+        return jsonify({"error": "Video not found"}), 404
+    return jsonify(video.to_dict(admin_view=True)), 200
 
-    video = Video.query.get_or_404(video_id)
+
+@videos_bp.route("/admin/<uuid:video_id>", methods=["PUT"])
+@admin_token_required
+def update_video(current_admin, video_id):
+    video = Video.query.get(video_id)
+    if not video:
+        return jsonify({"error": "Video not found"}), 404
+
     data = request.get_json() or {}
 
     editable_fields = [
@@ -166,27 +154,30 @@ def update_video(video_id):
         "aspect_ratio",
         "type",
         "visibility",
-        "is_active"
+        "is_active",
     ]
 
     for field in editable_fields:
         if field in data:
             setattr(video, field, data[field])
 
+    video.updated_at = datetime.utcnow()
     db.session.commit()
 
     return jsonify(video.to_dict(admin_view=True)), 200
 
 
 @videos_bp.route("/admin/<uuid:video_id>", methods=["DELETE"])
-def delete_video(video_id):
-    if not admin_required():
-        return jsonify({"error": "Admin access required"}), 403
+@admin_token_required
+def delete_video(current_admin, video_id):
+    video = Video.query.get(video_id)
+    if not video:
+        return jsonify({"error": "Video not found"}), 404
 
-    video = Video.query.get_or_404(video_id)
-
+    # Soft delete
     video.is_active = False
     video.deleted_at = datetime.utcnow()
+    video.updated_at = datetime.utcnow()
 
     db.session.commit()
 

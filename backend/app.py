@@ -20,9 +20,21 @@ from extensions import db, jwt
 # ----------------------------------------------------
 # Models (needed for migrations / Alembic discovery)
 # ----------------------------------------------------
-from users.models import User, EmotionalProfile, FaceEmbedding
+from users.models import User, EmotionalProfile
 from admin.models import Admin
 from videos.models import Video
+from face.models import FaceEmbedding
+
+# ----------------------------------------------------
+# Face Blueprints
+# ----------------------------------------------------
+# Face login (users)
+from face.routes import face_bp
+
+# Face login (admins)
+from admin.face.routes import admin_face_bp
+
+
 
 # ----------------------------------------------------
 # Blueprints
@@ -100,6 +112,12 @@ def create_app():
 
     # Videos
     app.register_blueprint(videos_bp)       # /api/videos/*
+    
+    # Face login
+        # Face login
+    app.register_blueprint(face_bp)          # /api/face/*
+    app.register_blueprint(admin_face_bp)    # /api/admin/face/*
+
 
     # ----------------------------------------------------
     # Health Check
