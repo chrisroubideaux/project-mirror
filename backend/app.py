@@ -1,5 +1,4 @@
 # backend/app.py
-
 from dotenv import load_dotenv
 load_dotenv()   # MUST BE FIRST
 
@@ -13,9 +12,9 @@ from flask_migrate import Migrate
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 # ----------------------------------------------------
-# Extensions
+# Extensions (SINGLE SOURCE OF TRUTH)
 # ----------------------------------------------------
-from extensions import db, jwt
+from extensions import db, jwt, limiter
 
 # ----------------------------------------------------
 # Models (needed for migrations / Alembic discovery)
@@ -28,13 +27,8 @@ from face.models import FaceEmbedding
 # ----------------------------------------------------
 # Face Blueprints
 # ----------------------------------------------------
-# Face login (users)
 from face.routes import face_bp
-
-# Face login (admins)
 from admin.face.routes import admin_face_bp
-
-
 
 # ----------------------------------------------------
 # Blueprints
@@ -88,11 +82,14 @@ def create_app():
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
     # ----------------------------------------------------
-    # Init Extensions
+    # Init Extensions (INIT ONCE)
     # ----------------------------------------------------
     db.init_app(app)
     jwt.init_app(app)
     migrate.init_app(app, db)
+
+    # 🔐 INIT GLOBAL RATE LIMITER
+    limiter.init_app(app)
 
     # ----------------------------------------------------
     # Register Blueprints
@@ -112,12 +109,10 @@ def create_app():
 
     # Videos
     app.register_blueprint(videos_bp)       # /api/videos/*
-    
-    # Face login
-        # Face login
-    app.register_blueprint(face_bp)          # /api/face/*
-    app.register_blueprint(admin_face_bp)    # /api/admin/face/*
 
+    # Face login
+    app.register_blueprint(face_bp)         # /api/face/*
+    app.register_blueprint(admin_face_bp)   # /api/admin/face/*
 
     # ----------------------------------------------------
     # Health Check
@@ -131,8 +126,11 @@ def create_app():
 
 if __name__ == "__main__":
     application = create_app()
-    application.run(debug=True, host="0.0.0.0", port=5000)
-
+    application.run(
+        debug=True,
+        host="0.0.0.0",
+        port=5000
+    )
 
 
 """"""""""

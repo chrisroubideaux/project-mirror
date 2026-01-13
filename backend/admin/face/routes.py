@@ -1,4 +1,196 @@
 # backend/admin/face/routes.py
+import os
+from flask import request, jsonify
+
+from flask_jwt_extended import (
+    jwt_required,
+    get_jwt,
+    create_access_token,
+)
+
+from extensions import db, limiter
+from admin.models import Admin
+from face.models import FaceEmbedding
+from face.face_utils import (
+    get_embedding_from_bytes,
+    get_embedding_from_gcs,
+    cosine_similarity,
+)
+
+from . import admin_face_bp
+
+
+# =====================================================
+# Config
+# =====================================================
+GCS_BUCKET = os.getenv("GCS_BUCKET")
+SIMILARITY_THRESHOLD = 0.65
+LIVENESS_MAX_SIMILARITY = 0.995
+MAX_FACES_PER_ADMIN = 5
+
+
+# =====================================================
+# REGISTER FACE(S) — ADMIN ONLY
+# =====================================================
+@admin_face_bp.route("/register", methods=["POST"])
+@jwt_required()
+def register_admin_face():
+    claims = get_jwt()
+    if claims.get("role") != "admin":
+        return jsonify({"error": "admin_access_required"}), 403
+
+    admin_id = claims.get("sub")
+    admin = Admin.query.get(admin_id)
+
+    if not admin or not admin.is_active:
+        return jsonify({"error": "admin_not_found"}), 404
+
+    if len(admin.face_embeddings) >= MAX_FACES_PER_ADMIN:
+        return jsonify({
+            "error": "face_limit_reached",
+            "max_faces": MAX_FACES_PER_ADMIN
+        }), 400
+
+    embeddings = []
+    uploaded_images = []
+
+    # ----------------------------------
+    # Option A: Direct upload(s)
+    # ----------------------------------
+    if "image" in request.files:
+        files = request.files.getlist("image")
+        for f in files:
+            emb = get_embedding_from_bytes(f.read())
+            if emb:
+                embeddings.append(emb)
+                uploaded_images.append("local-only")
+
+    # ----------------------------------
+    # Option B: GCS paths (optional)
+    # ----------------------------------
+    elif request.is_json:
+        paths = request.json.get("gcs_paths", [])
+        for path in paths:
+            emb = get_embedding_from_gcs(GCS_BUCKET, path)
+            if emb:
+                embeddings.append(emb)
+                uploaded_images.append(
+                    f"https://storage.googleapis.com/{GCS_BUCKET}/{path}"
+                )
+
+    if not embeddings:
+        return jsonify({"error": "no_valid_face_detected"}), 400
+
+    ids = []
+    for emb in embeddings:
+        record = FaceEmbedding(
+            admin_id=admin.id,
+            embedding=emb,
+        )
+        db.session.add(record)
+        db.session.flush()
+        ids.append(str(record.id))
+
+    db.session.commit()
+
+    token = create_access_token(
+        identity=str(admin.id),
+        additional_claims={"role": "admin"},
+    )
+
+    return jsonify({
+        "message": f"{len(ids)} admin face(s) registered",
+        "embedding_ids": ids,
+        "uploaded_images": uploaded_images,
+        "admin": {
+            "id": str(admin.id),
+            "email": admin.email,
+            "full_name": admin.full_name,
+        },
+        "token": token,
+    }), 201
+
+
+# =====================================================
+# LOGIN WITH FACE — ADMIN (LIVENESS + RATE LIMITED)
+# =====================================================
+@admin_face_bp.route("/login", methods=["POST"])
+@limiter.limit("5 per minute")
+def admin_face_login():
+    # ----------------------------------
+    # Require two images for liveness
+    # ----------------------------------
+    if "image1" not in request.files or "image2" not in request.files:
+        return jsonify({
+            "match": False,
+            "reason": "two_images_required"
+        }), 400
+
+    emb1 = get_embedding_from_bytes(request.files["image1"].read())
+    emb2 = get_embedding_from_bytes(request.files["image2"].read())
+
+    if not emb1 or not emb2:
+        return jsonify({
+            "match": False,
+            "reason": "no_face_detected"
+        }), 400
+
+    # ----------------------------------
+    # Liveness check
+    # ----------------------------------
+    motion_score = cosine_similarity(emb1, emb2)
+    if motion_score >= LIVENESS_MAX_SIMILARITY:
+        return jsonify({
+            "match": False,
+            "reason": "no_liveness_detected",
+            "motion_score": round(motion_score, 4)
+        }), 401
+
+    embedding = emb2
+
+    # ----------------------------------
+    # Match against ACTIVE admins + embeddings
+    # ----------------------------------
+    best_admin = None
+    best_score = 0.0
+
+    active_embeddings = (
+        FaceEmbedding.query
+        .filter_by(is_active=True)
+        .join(Admin)
+        .filter(Admin.is_active == True)
+        .all()
+    )
+
+    for emb in active_embeddings:
+        score = cosine_similarity(embedding, emb.embedding)
+        if score > best_score:
+            best_score = score
+            best_admin = emb.admin
+
+    if best_admin and best_score >= SIMILARITY_THRESHOLD:
+        token = create_access_token(
+            identity=str(best_admin.id),
+            additional_claims={"role": "admin"},
+        )
+
+        return jsonify({
+            "match": True,
+            "score": round(min(best_score, 0.999), 4),
+            "token": token,
+            "user": {  # 🔑 keep same shape as user login
+                "id": str(best_admin.id),
+                "email": best_admin.email,
+                "full_name": best_admin.full_name,
+            }
+        }), 200
+
+    return jsonify({
+        "match": False,
+        "score": round(best_score, 4)
+    }), 401
+
+"""""""""""
 
 from flask import request, jsonify
 from flask_jwt_extended import (
@@ -155,3 +347,6 @@ def admin_face_login():
         "match": False,
         "score": round(best_score, 4),
     }), 401
+    
+    
+"""""""""""""""
