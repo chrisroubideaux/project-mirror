@@ -1,17 +1,15 @@
 # backend/users/oauth.py
 
+# backend/users/oauth.py
 import os
 import logging
 import requests
-from uuid import uuid4
-from datetime import datetime
 from urllib.parse import urlencode
 from flask import Blueprint, jsonify, redirect, request
-from werkzeug.security import generate_password_hash
 
-from .models import User
 from extensions import db
 from utils.jwt_token import generate_jwt_token
+from .identity_linking import get_or_create_user_from_oauth
 
 oauth_bp = Blueprint("oauth", __name__, url_prefix="/auth")
 logging.basicConfig(level=logging.DEBUG)
@@ -20,162 +18,110 @@ FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000").rstrip("/")
 SERVER_BASE_URL = "http://localhost:5000"
 
 
-# ============================================================
-# GOOGLE OAUTH (Manual flow)
-# ============================================================
-
 @oauth_bp.route("/google/login")
 def google_login():
-    client_id = os.getenv("GOOGLE_CLIENT_ID")
-    redirect_uri = f"{SERVER_BASE_URL}/auth/google/callback"
-
-    query = {
-        "client_id": client_id,
-        "redirect_uri": redirect_uri,
+    params = {
+        "client_id": os.getenv("GOOGLE_CLIENT_ID"),
+        "redirect_uri": f"{SERVER_BASE_URL}/auth/google/callback",
         "response_type": "code",
         "scope": "openid email profile",
+        "access_type": "offline",
         "prompt": "consent",
-        "access_type": "offline"
     }
+    return redirect("https://accounts.google.com/o/oauth2/v2/auth?" + urlencode(params))
 
-    return redirect("https://accounts.google.com/o/oauth2/v2/auth?" + urlencode(query))
 
-# Google OAuth callback
 @oauth_bp.route("/google/callback")
 def google_callback():
     code = request.args.get("code")
     if not code:
         return jsonify({"error": "Missing code"}), 400
 
-    client_id = os.getenv("GOOGLE_CLIENT_ID")
-    client_secret = os.getenv("GOOGLE_CLIENT_SECRET")
-    redirect_uri = f"{SERVER_BASE_URL}/auth/google/callback"
+    token_res = requests.post(
+        "https://oauth2.googleapis.com/token",
+        data={
+            "code": code,
+            "client_id": os.getenv("GOOGLE_CLIENT_ID"),
+            "client_secret": os.getenv("GOOGLE_CLIENT_SECRET"),
+            "redirect_uri": f"{SERVER_BASE_URL}/auth/google/callback",
+            "grant_type": "authorization_code",
+        },
+    )
+    if token_res.status_code != 200:
+        return jsonify({"error": "Token exchange failed"}), 400
 
-    # Exchange code for token
-    token_data = {
-        "code": code,
-        "client_id": client_id,
-        "client_secret": client_secret,
-        "redirect_uri": redirect_uri,
-        "grant_type": "authorization_code",
-    }
-
-    token_res = requests.post("https://oauth2.googleapis.com/token", data=token_data)
     access_token = token_res.json().get("access_token")
 
-    # Get user info
-    info_res = requests.get(
+    info = requests.get(
         "https://www.googleapis.com/oauth2/v3/userinfo",
         headers={"Authorization": f"Bearer {access_token}"},
+    ).json()
+
+    user = get_or_create_user_from_oauth(
+        provider="google",
+        provider_user_id=info.get("sub"),
+        email=info.get("email"),
+        email_verified=bool(info.get("email_verified")),
+        full_name=info.get("name"),
+        avatar_url=info.get("picture"),
     )
-    info = info_res.json()
-
-    email = info.get("email")
-    name = info.get("name")
-    picture = info.get("picture")
-
-    # Create or get user
-    user = User.query.filter_by(email=email).first()
-    if not user:
-        user = User(
-            id=str(uuid4()),
-            email=email,
-            full_name=name,
-            profile_image_url=picture,
-            oauth_provider="google",
-            password_hash=generate_password_hash(str(uuid4())),
-            created_at=datetime.utcnow(),
-        )
-        db.session.add(user)
-        db.session.commit()
 
     token = generate_jwt_token(str(user.id), user.email)
-
-    # 🚨 FIXED: send user back to login page → Login.tsx handles the redirect to profile
     return redirect(f"{FRONTEND_URL}/login?token={token}&id={user.id}")
 
 
-# ============================================================
-# FACEBOOK OAUTH (Manual flow)
-# ============================================================
-
 @oauth_bp.route("/facebook/login")
 def facebook_login():
-    client_id = os.getenv("FACEBOOK_CLIENT_ID")
-    redirect_uri = f"{SERVER_BASE_URL}/auth/facebook/callback"
-
-    query = {
-        "client_id": client_id,
-        "redirect_uri": redirect_uri,
+    params = {
+        "client_id": os.getenv("FACEBOOK_CLIENT_ID"),
+        "redirect_uri": f"{SERVER_BASE_URL}/auth/facebook/callback",
         "scope": "email,public_profile",
-        "response_type": "code"
+        "response_type": "code",
     }
+    return redirect("https://www.facebook.com/v19.0/dialog/oauth?" + urlencode(params))
 
-    return redirect("https://www.facebook.com/v19.0/dialog/oauth?" + urlencode(query))
 
-# Facebook OAuth callback
 @oauth_bp.route("/facebook/callback")
 def facebook_callback():
     code = request.args.get("code")
     if not code:
         return jsonify({"error": "Missing code from Facebook"}), 400
 
-    client_id = os.getenv("FACEBOOK_CLIENT_ID")
-    client_secret = os.getenv("FACEBOOK_CLIENT_SECRET")
-    redirect_uri = f"{SERVER_BASE_URL}/auth/facebook/callback"
+    token_res = requests.get(
+        "https://graph.facebook.com/v19.0/oauth/access_token",
+        params={
+            "client_id": os.getenv("FACEBOOK_CLIENT_ID"),
+            "client_secret": os.getenv("FACEBOOK_CLIENT_SECRET"),
+            "redirect_uri": f"{SERVER_BASE_URL}/auth/facebook/callback",
+            "code": code,
+        },
+    )
 
-    # Exchange code for access token
-    token_url = "https://graph.facebook.com/v19.0/oauth/access_token"
-    params = {
-        "client_id": client_id,
-        "client_secret": client_secret,
-        "redirect_uri": redirect_uri,
-        "code": code,
-    }
-
-    token_res = requests.get(token_url, params=params)
     access_token = token_res.json().get("access_token")
-
     if not access_token:
         return jsonify({"error": "Failed to obtain access token"}), 400
 
-    # Fetch user data
-    user_res = requests.get(
+    info = requests.get(
         "https://graph.facebook.com/me?fields=id,name,email,picture.type(large)",
-        params={"access_token": access_token}
-    )
+        params={"access_token": access_token},
+    ).json()
 
-    info = user_res.json()
     email = info.get("email")
-    name = info.get("name")
-    picture = (
-        info.get("picture", {})
-        .get("data", {})
-        .get("url")
-    )
-
     if not email:
         return jsonify({"error": "Facebook did not return an email"}), 400
 
-    # Create user if needed
-    user = User.query.filter_by(email=email).first()
-    if not user:
-        user = User(
-            id=str(uuid4()),
-            email=email,
-            full_name=name,
-            profile_image_url=picture,
-            oauth_provider="facebook",
-            password_hash=generate_password_hash(str(uuid4())),
-            created_at=datetime.utcnow(),
-        )
-        db.session.add(user)
-        db.session.commit()
+    picture = (info.get("picture") or {}).get("data", {}).get("url")
 
-    # Issue JWT
+    user = get_or_create_user_from_oauth(
+        provider="facebook",
+        provider_user_id=info.get("id"),
+        email=email,
+        email_verified=True,  # facebook email presence is “verified enough” for our use
+        full_name=info.get("name"),
+        avatar_url=picture,
+    )
+
     token = generate_jwt_token(str(user.id), user.email)
-
-    # 🚨 FIXED: redirect to the login page — NOT the profile page
     return redirect(f"{FRONTEND_URL}/login?token={token}&id={user.id}")
 
 
