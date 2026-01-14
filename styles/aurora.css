@@ -1,5 +1,5 @@
 /* ================================================= */
-/* AURORA VISUAL PRESENCE (CANVAS PLAYER)            */
+/* AURORA CSS           */
 /* ================================================= */
 
 .aurora-presence {
@@ -344,6 +344,106 @@
   cursor: pointer;
 }
 
+
+
+/* 🌌 Ambient Aurora Particles */
+.aurora-particles {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.aurora-particles span {
+  position: absolute;
+  width: 7px;
+  height: 7px;
+  background: rgba(111, 66, 193, 0.35);
+  border-radius: 50%;
+  animation: floatParticle linear infinite;
+  filter: blur(1px);
+}
+
+@keyframes floatParticle {
+  from {
+    transform: translateY(110vh) scale(0.6);
+    opacity: 0;
+  }
+  10% {
+    opacity: 0.8;
+  }
+  to {
+    transform: translateY(-10vh) scale(1);
+    opacity: 0;
+  }
+}
+
+/* randomize */
+.aurora-particles span:nth-child(n) {
+  left: calc(100% * var(--x));
+  animation-duration: calc(20s + var(--d));
+}
+/* 🎥 Camera Ring */
+.camera-ring {
+  width: 170px;
+  height: 170px;
+  border-radius: 50%;
+  padding: 4px;
+  background: conic-gradient(#0d6efd, #6f42c1, #0d6efd);
+  transition: all 0.4s ease;
+}
+
+.camera-ring.idle {
+  animation: slowRotate 18s linear infinite;
+  opacity: 0.75;
+}
+
+.camera-ring.scanning {
+  animation: fastPulse 1.5s ease-in-out infinite;
+  opacity: 1;
+}
+
+@keyframes slowRotate {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes fastPulse {
+  0% {
+    box-shadow: 0 0 0 rgba(111, 66, 193, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 25px rgba(111, 66, 193, 0.8);
+  }
+  100% {
+    box-shadow: 0 0 0 rgba(111, 66, 193, 0.4);
+  }
+}
+/* 🧠 System Ready Pulse */
+.system-ready {
+  font-size: 0.75rem;
+  letter-spacing: 0.3em;
+  color: #6f42c1;
+  animation: readyPulse 2.5s ease-in-out infinite;
+  text-align: center;
+}
+
+@keyframes readyPulse {
+  0% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.3;
+  }
+}
 
 
 /* ============================= */
