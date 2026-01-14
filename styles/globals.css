@@ -133,6 +133,39 @@ a {
   text-decoration: none;
 }
 
+/* Default (dark mode) */
+.oauth-btn {
+  border-radius: 14px;
+  padding: 12px 0;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  color: #ffffff;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.25s ease;
+}
+
+/* 🌞 Light mode override */
+[data-theme='light'] .oauth-btn {
+  background: rgba(0, 0, 0, 0.04);
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  color: #1e293b;
+}
+
+/* Hover effects remain brand-colored */
+.oauth-btn.google:hover {
+  box-shadow: 0 12px 28px rgba(234, 67, 53, 0.35);
+  transform: translateY(-1px);
+}
+
+.oauth-btn.facebook:hover {
+  box-shadow: 0 12px 28px rgba(24, 119, 242, 0.35);
+  transform: translateY(-1px);
+}
+
+
 /* ---------- Dark Mode Preference ---------- */
 @media (prefers-color-scheme: dark) {
   html:not([data-theme="light"]) {

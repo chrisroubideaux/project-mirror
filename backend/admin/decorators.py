@@ -1,5 +1,4 @@
 # backend/admin/decorators.py
-# backend/admin/decorators.py
 
 import uuid
 from functools import wraps

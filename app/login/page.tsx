@@ -1,5 +1,329 @@
 // app/login/page.tsx
+// app/login/page.tsx
 
+'use client';
+
+import Nav from '@/components/nav/Nav';
+import AuroraParticles from '@/components/profile/AuroraParticles';
+import FaceVerifiedOverlay from '@/components/profile/FaceVerifiedOverlay';
+
+import { useEffect, useRef, useState } from 'react';
+import { FaFacebookSquare, FaGoogle } from 'react-icons/fa';
+import { FiCamera } from 'react-icons/fi';
+import { toast } from 'react-toastify';
+import { CircularProgressbar, buildStyles } from 'react-circular-progressbar';
+
+const API_BASE =
+  process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000';
+
+const USER_TOKEN_KEY = 'aurora_user_token';
+
+const MAX_FAILS = 3;
+const LOCKOUT_SECONDS = 15;
+
+export default function LoginPage() {
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [verified, setVerified] = useState(false);
+  const [confidence, setConfidence] = useState<number | null>(null);
+
+  const [failCount, setFailCount] = useState(0);
+  const [lockoutUntil, setLockoutUntil] = useState<number | null>(null);
+
+  // OAuth
+  const handleGoogleLogin = () => {
+    window.location.href = `${API_BASE}/auth/google/login`;
+  };
+
+  const handleFacebookLogin = () => {
+    window.location.href = `${API_BASE}/auth/facebook/login`;
+  };
+
+  // Face login
+  const handleFaceLogin = async () => {
+    if (lockoutUntil && Date.now() < lockoutUntil) {
+      toast.error('Face login temporarily locked');
+      return;
+    }
+
+    let stream: MediaStream | null = null;
+
+    try {
+      setLoading(true);
+      setError(null);
+      setConfidence(null);
+
+      toast.info('Scanning face… hold still', { autoClose: 1200 });
+
+      stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
+      }
+
+      const capture = (): Promise<Blob> =>
+        new Promise((resolve) => {
+          const canvas = document.createElement('canvas');
+          canvas.width = videoRef.current!.videoWidth;
+          canvas.height = videoRef.current!.videoHeight;
+          canvas
+            .getContext('2d')!
+            .drawImage(videoRef.current!, 0, 0);
+          canvas.toBlob((b) => resolve(b!), 'image/jpeg', 0.95);
+        });
+
+      const image1 = await capture();
+      await new Promise((r) => setTimeout(r, 700));
+      const image2 = await capture();
+
+      stream.getTracks().forEach((t) => t.stop());
+
+      const formData = new FormData();
+      formData.append('image1', image1);
+      formData.append('image2', image2);
+
+      const res = await fetch(`${API_BASE}/api/face/login`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || !data.match) {
+        throw new Error(data.reason || 'Face verification failed');
+      }
+
+      const score = Math.round((data.score ?? 0.9) * 100);
+      setConfidence(score);
+
+      localStorage.setItem(USER_TOKEN_KEY, data.token);
+
+      toast.success('Face verified');
+      setVerified(true);
+      setFailCount(0);
+
+      setTimeout(() => {
+        window.location.replace(`/profile/${data.user.id}`);
+      }, 1000);
+    } catch (err) {
+      setFailCount((c) => {
+        const next = c + 1;
+        if (next >= MAX_FAILS) {
+          setLockoutUntil(Date.now() + LOCKOUT_SECONDS * 1000);
+        }
+        return next;
+      });
+
+      toast.error('Face login failed');
+      setError(err instanceof Error ? err.message : 'Face login failed');
+    } finally {
+      if (stream) stream.getTracks().forEach((t) => t.stop());
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    const token = url.searchParams.get('token');
+
+    if (token) {
+      localStorage.setItem(USER_TOKEN_KEY, token);
+      window.location.replace('/profile/me');
+    }
+  }, []);
+
+  return (
+    <>
+      <Nav />
+
+      <div className="position-relative min-vh-100 d-flex align-items-center justify-content-center">
+        <AuroraParticles />
+
+        <div className="login-card position-relative p-4 text-center">
+          <h2 className="mb-1 fw-semibold">Login</h2>
+          <p className="login-subtext mb-2">
+            Secure biometric authentication
+          </p>
+
+          <div className="aurora-core mx-auto mb-4" />
+
+          {loading && (
+            <div className="d-flex justify-content-center mb-4">
+              <div className="camera-ring">
+                <video
+                  ref={videoRef}
+                  muted
+                  playsInline
+                  className="camera-video"
+                />
+              </div>
+            </div>
+          )}
+
+          {confidence !== null && (
+            <div className="d-flex justify-content-center mb-3">
+              <div style={{ width: 120 }}>
+                <CircularProgressbar
+                  value={confidence}
+                  text={`${confidence}%`}
+                  styles={buildStyles({
+                    pathColor: '#8b5cf6',
+                    textColor: 'var(--foreground)',
+                    trailColor: 'rgba(0,0,0,0.1)',
+                  })}
+                />
+              </div>
+            </div>
+          )}
+
+          <div className="d-flex flex-column gap-3 mt-3">
+            <button
+              className="btn face-btn w-100"
+              onClick={handleFaceLogin}
+              disabled={
+                loading ||
+                (lockoutUntil !== null &&
+                  Date.now() < lockoutUntil)
+              }
+            >
+              <FiCamera className="me-2" />
+              {loading ? 'Verifying…' : 'Login with Face'}
+            </button>
+
+            <button
+              className="btn oauth-btn google w-100"
+              onClick={handleGoogleLogin}
+            >
+              <FaGoogle /> Continue with Google
+            </button>
+
+            <button
+              className="btn oauth-btn facebook w-100"
+              onClick={handleFacebookLogin}
+            >
+              <FaFacebookSquare /> Continue with Facebook
+            </button>
+          </div>
+
+          {error && (
+            <p className="text-danger small mt-3">{error}</p>
+          )}
+
+          <div className="footer-text mt-4">
+            Project Aurora · 2026
+          </div>
+        </div>
+      </div>
+
+      <FaceVerifiedOverlay show={verified} />
+
+      <style jsx>{`
+        .login-card {
+          width: 420px;
+          border-radius: 22px;
+          backdrop-filter: blur(16px);
+          background: var(--card-bg);
+          box-shadow: var(--card-shadow);
+          color: var(--foreground);
+          z-index: 2;
+        }
+
+        .login-subtext {
+          opacity: 0.7;
+        }
+
+        .aurora-core {
+          width: 42px;
+          height: 42px;
+          border-radius: 50%;
+          background: radial-gradient(circle, #8b5cf6, #0d6efd);
+          box-shadow: 0 0 18px rgba(139, 92, 246, 0.9);
+          animation: pulse 2.2s ease-in-out infinite;
+        }
+
+        .camera-ring {
+          width: 170px;
+          height: 170px;
+          border-radius: 50%;
+          padding: 4px;
+          background: conic-gradient(#0d6efd, #6f42c1, #0d6efd);
+        }
+
+        .camera-video {
+          width: 100%;
+          height: 100%;
+          border-radius: 50%;
+          object-fit: cover;
+          background: #000;
+        }
+
+        .face-btn {
+          background: linear-gradient(135deg, #0d6efd, #8b5cf6);
+          border-radius: 14px;
+          padding: 12px 0;
+          font-weight: 500;
+          color: #fff;
+          box-shadow: 0 10px 25px rgba(13, 110, 253, 0.4);
+        }
+
+        .oauth-btn {
+          border-radius: 14px;
+          padding: 12px 0;
+          background: rgba(0, 0, 0, 0.04);
+          border: 1px solid rgba(0, 0, 0, 0.15);
+          color: var(--foreground);
+          display: flex;
+          gap: 8px;
+          align-items: center;
+          justify-content: center;
+          transition: all 0.25s ease;
+        }
+
+        html[data-theme='dark'] .oauth-btn {
+          background: rgba(255, 255, 255, 0.08);
+          border: 1px solid rgba(255, 255, 255, 0.25);
+          color: #fff;
+        }
+
+        .oauth-btn.google:hover {
+          box-shadow: 0 12px 28px rgba(234, 67, 53, 0.35);
+          transform: translateY(-1px);
+        }
+
+        .oauth-btn.facebook:hover {
+          box-shadow: 0 12px 28px rgba(24, 119, 242, 0.35);
+          transform: translateY(-1px);
+        }
+
+        .footer-text {
+          opacity: 0.45;
+          letter-spacing: 1px;
+          font-size: 0.75rem;
+        }
+
+        @keyframes pulse {
+          0% {
+            transform: scale(0.9);
+            opacity: 0.7;
+          }
+          50% {
+            transform: scale(1.1);
+            opacity: 1;
+          }
+          100% {
+            transform: scale(0.9);
+            opacity: 0.7;
+          }
+        }
+      `}</style>
+    </>
+  );
+}
+
+
+{/*
 'use client';
 
 import Nav from '@/components/nav/Nav';
@@ -150,11 +474,11 @@ export default function LoginPage() {
     <>
       <Nav />
 
-      {/* 🌌 Background */}
+   
       <div className="position-relative min-vh-100 d-flex align-items-center justify-content-center">
         <AuroraParticles />
 
-        {/* 🧊 Glass Login Card */}
+      
         <div
           className="position-relative p-4 text-center"
           style={{
@@ -173,7 +497,7 @@ export default function LoginPage() {
             Secure biometric authentication
           </p>
 
-          {/* 🎥 Camera Preview */}
+         
           {loading && (
             <div className="d-flex justify-content-center mb-4">
               <div
@@ -202,7 +526,7 @@ export default function LoginPage() {
             </div>
           )}
 
-          {/* 🧠 Confidence Ring */}
+         
           {confidence !== null && (
             <div className="d-flex justify-content-center mb-3">
               <div style={{ width: 120 }}>
@@ -219,7 +543,7 @@ export default function LoginPage() {
             </div>
           )}
 
-          {/* 🔐 Actions */}
+         
           <div className="d-flex flex-column gap-3 mt-3">
             <button
               className="btn w-100"
@@ -261,8 +585,10 @@ export default function LoginPage() {
         </div>
       </div>
 
-      {/* ✅ Success Overlay */}
+    
       <FaceVerifiedOverlay show={verified} />
     </>
   );
 }
+
+*/}
