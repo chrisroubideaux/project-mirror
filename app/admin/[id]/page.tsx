@@ -1,3 +1,169 @@
+// app/admin/[id]/page.tsx
+'use client';
+
+import { useEffect, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { motion, AnimatePresence } from 'framer-motion';
+
+import AdminSidebar from '@/components/admin/sidebar/AdminSidebar';
+
+const API_BASE =
+  process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000';
+
+const ADMIN_TOKEN_KEY = 'aurora_admin_token';
+
+/* --------------------------------------------------
+   Types
+-------------------------------------------------- */
+
+type AdminProfile = {
+  id: string;
+  full_name: string;
+  email: string;
+};
+
+type AdminSidebarTab =
+  | 'dashboard'
+  | 'upload'
+  | 'videos';
+
+/* --------------------------------------------------
+   Page
+-------------------------------------------------- */
+
+export default function AdminPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  const [admin, setAdmin] = useState<AdminProfile | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] =
+    useState<AdminSidebarTab>('dashboard');
+
+  /* --------------------------------------------------
+     Auth bootstrap (mirrors user profile)
+  -------------------------------------------------- */
+  useEffect(() => {
+    const tokenFromURL =
+      searchParams.get('token') ||
+      searchParams.get('admin_token');
+
+    if (tokenFromURL) {
+      localStorage.setItem(ADMIN_TOKEN_KEY, tokenFromURL);
+    }
+
+    const token =
+      tokenFromURL ||
+      localStorage.getItem(ADMIN_TOKEN_KEY);
+
+    if (!token) {
+      router.replace('/admin/login');
+      return;
+    }
+
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/admins/me`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (!res.ok) {
+          throw new Error('Unauthorized');
+        }
+
+        const data = (await res.json()) as AdminProfile;
+        setAdmin(data);
+      } catch (err) {
+        console.error(err);
+        setError('Failed to load admin profile');
+        localStorage.removeItem(ADMIN_TOKEN_KEY);
+        router.replace('/admin/login');
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [searchParams, router]);
+
+  /* --------------------------------------------------
+     Logout
+  -------------------------------------------------- */
+  const handleLogout = () => {
+    localStorage.removeItem(ADMIN_TOKEN_KEY);
+    router.push('/admin/login');
+  };
+
+  /* --------------------------------------------------
+     Layout states
+  -------------------------------------------------- */
+  if (loading) {
+    return <div className="p-4">Loading…</div>;
+  }
+
+  if (error || !admin) {
+    return null;
+  }
+
+  /* --------------------------------------------------
+     UI
+  -------------------------------------------------- */
+  return (
+    <div className="layout min-vh-100">
+      <div className="container-fluid">
+        <div className="row g-0">
+          {/* Sidebar */}
+          <div className="col-auto">
+            <AdminSidebar
+              adminId={admin.id}
+              adminName={admin.full_name}
+              activeTab={activeTab}
+              onTabChange={setActiveTab}
+              onLogout={handleLogout}
+            />
+          </div>
+
+          {/* Main content */}
+          <div className="col p-4">
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={activeTab}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                transition={{ duration: 0.25 }}
+                className="h-100"
+              >
+                {/* Placeholder */}
+                <div
+                  className="d-flex align-items-center justify-content-center h-100"
+                  style={{
+                    borderRadius: 20,
+                    border: '1px dashed var(--aurora-bento-border)',
+                    background: 'var(--aurora-bento-bg)',
+                  }}
+                >
+                  <div style={{ opacity: 0.6 }}>
+                    <h4 className="fw-light mb-2">
+                      {activeTab.toUpperCase()}
+                    </h4>
+                    <p className="mb-0">
+                      Admin content will render here
+                    </p>
+                  </div>
+                </div>
+              </motion.div>
+            </AnimatePresence>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+{/*
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -112,4 +278,6 @@ export default function AdminPage() {
     </div>
   );
 }
+
+*/}
 
