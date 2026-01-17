@@ -1,4 +1,5 @@
 // app/admin/[id]/page.tsx
+
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -6,6 +7,9 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 
 import AdminSidebar from '@/components/admin/sidebar/AdminSidebar';
+import UploadTab from '@/components/admin/uploads/UploadTab';
+import VideosTab from '@/components/admin/videos/VideosTab';
+
 
 const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000';
@@ -22,7 +26,7 @@ type AdminProfile = {
   email: string;
 };
 
-type AdminSidebarTab =
+export type AdminSidebarTab =
   | 'dashboard'
   | 'upload'
   | 'videos';
@@ -37,7 +41,6 @@ export default function AdminPage() {
 
   const [admin, setAdmin] = useState<AdminProfile | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] =
     useState<AdminSidebarTab>('dashboard');
 
@@ -51,11 +54,11 @@ export default function AdminPage() {
 
     if (tokenFromURL) {
       localStorage.setItem(ADMIN_TOKEN_KEY, tokenFromURL);
+      router.replace(window.location.pathname); // clean URL
+      return;
     }
 
-    const token =
-      tokenFromURL ||
-      localStorage.getItem(ADMIN_TOKEN_KEY);
+    const token = localStorage.getItem(ADMIN_TOKEN_KEY);
 
     if (!token) {
       router.replace('/admin/login');
@@ -78,7 +81,6 @@ export default function AdminPage() {
         setAdmin(data);
       } catch (err) {
         console.error(err);
-        setError('Failed to load admin profile');
         localStorage.removeItem(ADMIN_TOKEN_KEY);
         router.replace('/admin/login');
       } finally {
@@ -99,10 +101,14 @@ export default function AdminPage() {
      Layout states
   -------------------------------------------------- */
   if (loading) {
-    return <div className="p-4">Loading…</div>;
+    return (
+      <div className="p-4">
+        <h4>Loading admin dashboard…</h4>
+      </div>
+    );
   }
 
-  if (error || !admin) {
+  if (!admin) {
     return null;
   }
 
@@ -124,7 +130,7 @@ export default function AdminPage() {
             />
           </div>
 
-          {/* Main content */}
+          {/* Main Content */}
           <div className="col p-4">
             <AnimatePresence mode="wait">
               <motion.div
@@ -135,24 +141,39 @@ export default function AdminPage() {
                 transition={{ duration: 0.25 }}
                 className="h-100"
               >
-                {/* Placeholder */}
-                <div
-                  className="d-flex align-items-center justify-content-center h-100"
-                  style={{
-                    borderRadius: 20,
-                    border: '1px dashed var(--aurora-bento-border)',
-                    background: 'var(--aurora-bento-bg)',
-                  }}
-                >
-                  <div style={{ opacity: 0.6 }}>
-                    <h4 className="fw-light mb-2">
-                      {activeTab.toUpperCase()}
-                    </h4>
-                    <p className="mb-0">
-                      Admin content will render here
-                    </p>
+                {/* -----------------------------
+                    DASHBOARD
+                ----------------------------- */}
+                {activeTab === 'dashboard' && (
+                  <div
+                    className="h-100 d-flex align-items-center justify-content-center"
+                    style={{
+                      borderRadius: 20,
+                      border:
+                        '1px dashed var(--aurora-bento-border)',
+                      background: 'var(--aurora-bento-bg)',
+                    }}
+                  >
+                    <div style={{ opacity: 0.6 }}>
+                      <h4 className="fw-light mb-2">
+                        Admin Dashboard
+                      </h4>
+                      <p className="mb-0">
+                        Upload and manage Aurora content
+                      </p>
+                    </div>
                   </div>
-                </div>
+                )}
+
+                {/* -----------------------------
+                    UPLOAD
+                ----------------------------- */}
+                {activeTab === 'upload' && <UploadTab />}
+
+                {/* -----------------------------
+                    VIDEOS (next step)
+                ----------------------------- */}
+                {activeTab === 'videos' && <VideosTab />}
               </motion.div>
             </AnimatePresence>
           </div>
