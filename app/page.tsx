@@ -1,4 +1,67 @@
 // app/page.tsx
+// app/page.tsx
+'use client';
+
+import { useState } from 'react';
+
+import Nav from '@/components/nav/Nav';
+import Footer from '@/components/nav/Footer';
+import VideoPlayer, {
+  type PlaybackVideo,
+} from '@/components/videos/VideoPlayer';
+
+export default function Home() {
+  const [activeVideo, setActiveVideo] =
+    useState<PlaybackVideo | null>(null);
+
+  return (
+    <>
+      <Nav />
+
+      <main
+        style={{
+          minHeight: '80vh',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          flexDirection: 'column',
+          gap: 24,
+        }}
+      >
+        <h1>Video Playback Test</h1>
+
+        <button
+          className="btn btn-primary btn-lg"
+          onClick={() =>
+            setActiveVideo({
+              title: 'Project Aurora – Intro',
+              subtitle: 'Hard-wired test',
+              video_url:
+                'https://storage.googleapis.com/project-mirror-assets-aurora/videos/intros/8f11dd89-b031-40ad-a5d1-497ebfb10312.mp4',
+              type: 'intro',
+            })
+          }
+        >
+          ▶ Play Video
+        </button>
+      </main>
+
+      {activeVideo && (
+        <VideoPlayer
+          video={activeVideo}
+          onClose={() => setActiveVideo(null)}
+        />
+      )}
+
+      <Footer />
+    </>
+  );
+}
+
+
+{/*
+
+// app/page.tsx
 'use client';
 
 import Nav from '@/components/nav/Nav';
@@ -25,9 +88,7 @@ export default function Home() {
       <Nav />
 
       <AuroraHero />
-      <AuroraOrbs />
 
-      {/* AVATAR DEMO CARD */}
       <section style={{ paddingTop: '5rem', paddingBottom: '5rem' }}>
         <AuroraAvatar
           poster="/demos/aurora-intro.jpg"
@@ -39,21 +100,19 @@ export default function Home() {
 
       <NeonSeparator />
 
-      {/* MAIN PRODUCT CARD */}
       <section style={{ paddingTop: '5rem', paddingBottom: '5rem' }}>
         <AuroraProductCard />
       </section>
 
       <NeonSeparator />
 
-      {/* TIMELINE / STEPS */}
       <section style={{ paddingTop: '6rem', paddingBottom: '6rem' }}>
         <AuroraTimeline />
       </section>
 
       <NeonSeparator />
 
-      {/* PRODUCT MOSAIC */}
+    
       <section style={{ paddingTop: '6rem', paddingBottom: '6rem' }}>
         <AuroraProductMosaic />
       </section>
@@ -63,70 +122,6 @@ export default function Home() {
   );
 }
 
-
-
-
-{/*
-
-// app/page.tsx
-'use client';
-
-import Nav from '@/components/nav/Nav';
-import Footer from '@/components/nav/Footer';
-
-// Hero Elements
-import AuroraHero from '@/components/hero/AuroraHero';
-import AuroraOrbs from '@/components/hero/AuroraOrbs';
-
-// Guest Presentation Components
-import AuroraProductCard from '@/components/guest/AuroraProductCard';
-import AuroraBentoGrid from '@/components/guest/AuroraBentoGrid';
-import AuroraTimeline from '@/components/guest/AuroraTimeline';
-import AuroraProductMosaic from '@/components/guest/AuroraProductMosaic';
-
-export default function Home() {
-  return (
-    <>
-      <Nav />
-
-    
-      <section
-        className="position-relative"
-        style={{
-          overflow: "hidden",
-          paddingTop: "6rem",
-          paddingBottom: "6rem",
-        }}
-      >
-        <AuroraOrbs />
-        <AuroraHero />
-      </section>
-
-   
-      <section style={{ paddingTop: "5rem", paddingBottom: "5rem" }}>
-        <AuroraProductCard />
-      </section>
-
-    
-      <section style={{ paddingTop: "6rem", paddingBottom: "6rem" }}>
-        <AuroraBentoGrid />
-      </section>
-
-    
-      <section style={{ paddingTop: "6rem", paddingBottom: "6rem" }}>
-        <AuroraTimeline />
-      </section>
-
-    
-      <section style={{ paddingTop: "6rem", paddingBottom: "6rem" }}>
-        <AuroraProductMosaic />
-      </section>
-
-     
-      <Footer />
-    </>
-  );
-}
 
 
 

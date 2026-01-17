@@ -1,5 +1,82 @@
 // components/avatar/AuroraAvatar.tsx
+// components/avatar/AuroraAvatar.tsx
+'use client';
 
+import { useMemo } from 'react';
+import { FaPlay } from 'react-icons/fa';
+
+type AuroraAvatarProps = {
+  title: string;
+  subtitle?: string;
+  poster?: string | null;
+  videoSrc: string;
+  duration?: string;
+  type?: 'intro' | 'trailer' | 'episode' | 'demo' | 'test';
+  onPlay: (video: {
+    title: string;
+    subtitle?: string;
+    video_url: string;
+    type?: string;
+  }) => void;
+};
+
+export default function AuroraAvatar({
+  title,
+  subtitle,
+  poster,
+  videoSrc,
+  duration = '0:42',
+  type,
+  onPlay,
+}: AuroraAvatarProps) {
+  const src = useMemo(() => videoSrc.trim(), [videoSrc]);
+
+  return (
+    <article
+      className="aurora-video-card"
+      role="button"
+      tabIndex={0}
+      onClick={() =>
+        onPlay({
+          title,
+          subtitle,
+          video_url: src,
+          type,
+        })
+      }
+    >
+      <div className="aurora-video-thumb">
+        <img
+          src={poster || '/placeholders/video-poster.jpg'}
+          alt={title}
+        />
+
+        {type && (
+          <span className="aurora-video-tag">
+            {type.toUpperCase()}
+          </span>
+        )}
+
+        <span className="aurora-video-duration">
+          {duration}
+        </span>
+
+        <div className="aurora-video-overlay">
+          <FaPlay className="aurora-video-play" />
+        </div>
+      </div>
+
+      <div className="aurora-video-meta">
+        <h3>{title}</h3>
+        {subtitle && <p>{subtitle}</p>}
+      </div>
+    </article>
+  );
+}
+
+
+
+{/*
 "use client";
 
 import { useEffect, useState } from "react";
@@ -23,7 +100,7 @@ export default function AuroraAvatar({
 }: AuroraAvatarProps) {
   const [open, setOpen] = useState(false);
 
-  /* ESC + scroll lock */
+  
   useEffect(() => {
     if (!open) return;
 
@@ -43,9 +120,7 @@ export default function AuroraAvatar({
 
   return (
     <>
-      {/* ============================= */}
-      {/* VIDEO CARD (THUMBNAIL)        */}
-      {/* ============================= */}
+     
 
       <motion.article
         className="aurora-video-card"
@@ -58,32 +133,25 @@ export default function AuroraAvatar({
           if (e.key === "Enter" || e.key === " ") setOpen(true);
         }}
       >
-        {/* THUMBNAIL */}
+      
         <div className="aurora-video-thumb">
           <img src={poster} alt={title} />
 
-          {/* INTRO TAG */}
           <span className="aurora-video-tag">INTRO</span>
 
-          {/* DURATION */}
           <span className="aurora-video-duration">{duration}</span>
 
-          {/* PLAY OVERLAY */}
           <div className="aurora-video-overlay">
             <FaPlay className="aurora-video-play" />
           </div>
         </div>
 
-        {/* META */}
         <div className="aurora-video-meta">
           <h3>{title}</h3>
           {subtitle && <p>{subtitle}</p>}
         </div>
       </motion.article>
 
-      {/* ============================= */}
-      {/* MODAL VIDEO PLAYER            */}
-      {/* ============================= */}
 
       <AnimatePresence>
         {open && (
@@ -124,3 +192,5 @@ export default function AuroraAvatar({
     </>
   );
 }
+
+*/}
