@@ -1,57 +1,63 @@
 // app/page.tsx
-// app/page.tsx
 'use client';
 
-import { useState } from 'react';
-
+import { useEffect, useState } from 'react';
 import Nav from '@/components/nav/Nav';
 import Footer from '@/components/nav/Footer';
-import VideoPlayer, {
-  type PlaybackVideo,
-} from '@/components/videos/VideoPlayer';
+import VideoCard, {
+  type PublicVideo,
+} from '@/components/videos/VideoCard';
 
 export default function Home() {
-  const [activeVideo, setActiveVideo] =
-    useState<PlaybackVideo | null>(null);
+  const [videos, setVideos] = useState<PublicVideo[]>([]);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch('http://localhost:5000/api/videos') // 🔥 IMPORTANT: explicit backend
+      .then((res) => {
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status}`);
+        }
+        return res.json();
+      })
+      .then((data) => {
+        console.log('VIDEOS FROM API:', data); // 🔥 MUST APPEAR
+        setVideos(data);
+      })
+      .catch((err) => {
+        console.error('FETCH ERROR:', err);
+        setError(err.message);
+      });
+  }, []);
 
   return (
     <>
       <Nav />
 
-      <main
-        style={{
-          minHeight: '80vh',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          flexDirection: 'column',
-          gap: 24,
-        }}
-      >
-        <h1>Video Playback Test</h1>
+      <main style={{ padding: 40 }}>
+        <h1>Videos</h1>
 
-        <button
-          className="btn btn-primary btn-lg"
-          onClick={() =>
-            setActiveVideo({
-              title: 'Project Aurora – Intro',
-              subtitle: 'Hard-wired test',
-              video_url:
-                'https://storage.googleapis.com/project-mirror-assets-aurora/videos/intros/8f11dd89-b031-40ad-a5d1-497ebfb10312.mp4',
-              type: 'intro',
-            })
-          }
-        >
-          ▶ Play Video
-        </button>
+        {/* 🔴 SHOW ERRORS */}
+        {error && (
+          <div style={{ color: 'red', marginBottom: 20 }}>
+            ❌ Error loading videos: {error}
+          </div>
+        )}
+
+        {/* 🔴 SHOW EMPTY STATE */}
+        {videos.length === 0 && !error && (
+          <div style={{ color: 'orange', marginBottom: 20 }}>
+            ⚠️ No videos returned from API
+          </div>
+        )}
+
+        {/* ✅ ACTUAL VIDEO CARDS */}
+        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+          {videos.map((video) => (
+            <VideoCard key={video.id} video={video} />
+          ))}
+        </div>
       </main>
-
-      {activeVideo && (
-        <VideoPlayer
-          video={activeVideo}
-          onClose={() => setActiveVideo(null)}
-        />
-      )}
 
       <Footer />
     </>
