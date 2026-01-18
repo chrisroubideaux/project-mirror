@@ -1,5 +1,4 @@
 // components/guest/IntroGrid.tsx
-// components/guest/IntroGrid.tsx
 'use client';
 
 import { useEffect, useState } from 'react';

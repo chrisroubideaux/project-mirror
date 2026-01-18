@@ -1,13 +1,14 @@
 // components/videos/VideoCard.tsx
 'use client';
 
+import { useRouter } from 'next/navigation';
+
 export type PublicVideo = {
   id: string;
   title: string;
   subtitle?: string | null;
   description?: string | null;
   poster_url: string;
-  video_url: string;
   duration?: string | null;
   aspect_ratio?: string | null;
   type: string;
@@ -17,17 +18,26 @@ export type PublicVideo = {
 
 export default function VideoCard({
   video,
-  onPlay,
 }: {
   video: PublicVideo;
-  onPlay: (v: PublicVideo) => void;
 }) {
+  const router = useRouter();
+
   return (
-    <button
-      type="button"
-      className="text-start border-0 p-0 bg-transparent w-100"
-      onClick={() => onPlay(video)}
-      style={{ color: 'inherit' }}
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={() => router.push(`/videos/${video.id}`)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          router.push(`/videos/${video.id}`);
+        }
+      }}
+      style={{
+        cursor: 'pointer',
+        color: 'inherit',
+        width: '100%',
+      }}
     >
       <div
         style={{
@@ -37,12 +47,20 @@ export default function VideoCard({
           background: 'var(--aurora-bento-bg)',
         }}
       >
+        {/* Thumbnail */}
         <div style={{ position: 'relative' }}>
           <img
-            src={video.poster_url}
+            src={video.poster_url || '/placeholder.jpg'}
             alt={video.title}
-            style={{ width: '100%', height: 180, objectFit: 'cover' }}
+            loading="lazy"
+            style={{
+              width: '100%',
+              height: 180,
+              objectFit: 'cover',
+              display: 'block',
+            }}
           />
+
           <div
             style={{
               position: 'absolute',
@@ -58,6 +76,7 @@ export default function VideoCard({
           </div>
         </div>
 
+        {/* Meta */}
         <div className="p-3">
           <div className="fw-semibold">{video.title}</div>
           <div style={{ fontSize: 13, opacity: 0.7 }}>
@@ -65,6 +84,6 @@ export default function VideoCard({
           </div>
         </div>
       </div>
-    </button>
+    </div>
   );
 }
