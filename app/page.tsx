@@ -8,6 +8,19 @@ import VideoCard, {
   type PublicVideo,
 } from '@/components/videos/VideoCard';
 
+// Hero Elements
+import AuroraHero from '@/components/hero/AuroraHero';
+import AuroraOrbs from '@/components/hero/AuroraOrbs';
+
+// Demo Avatar Card
+// Guest Presentation Components
+import AuroraProductCard from '@/components/guest/AuroraProductCard';
+// import AuroraBentoGrid from '@/components/guest/AuroraBentoGrid';
+import AuroraTimeline from '@/components/guest/AuroraTimeline';
+import AuroraProductMosaic from '@/components/guest/AuroraProductMosaic';
+
+import NeonSeparator from '@/components/about/NeonSeparator';
+
 export default function Home() {
   const [videos, setVideos] = useState<PublicVideo[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -33,8 +46,10 @@ export default function Home() {
   return (
     <>
       <Nav />
+      <AuroraHero />
+        
 
-      <main style={{ padding: 40 }}>
+      <section style={{ paddingTop: '5rem', paddingBottom: '5rem' }}>
         <h1>Videos</h1>
 
         {/* 🔴 SHOW ERRORS */}
@@ -57,7 +72,29 @@ export default function Home() {
             <VideoCard key={video.id} video={video} />
           ))}
         </div>
-      </main>
+      </section>
+
+      <NeonSeparator />
+
+
+  
+        
+       <section style={{ paddingTop: '5rem', paddingBottom: '5rem' }}>
+        <AuroraProductCard />
+      </section>
+
+      <NeonSeparator />
+
+      <section style={{ paddingTop: '6rem', paddingBottom: '6rem' }}>
+        <AuroraTimeline />
+      </section>
+
+      <NeonSeparator />
+
+    
+      <section style={{ paddingTop: '6rem', paddingBottom: '6rem' }}>
+        <AuroraProductMosaic />
+      </section>
 
       <Footer />
     </>
