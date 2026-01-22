@@ -1,16 +1,13 @@
 # backend/videos/routes.py
 
 from datetime import datetime
-
 from flask import Blueprint, jsonify, request
-
 from extensions import db
 from .models import Video
 
 # Auth decorators
 from utils.decorators import token_required
 from admin.decorators import admin_token_required
-
 
 videos_bp = Blueprint(
     "videos",
@@ -38,6 +35,10 @@ def get_public_videos():
 
     return jsonify([v.to_dict() for v in videos]), 200
 
+
+# =====================================================
+# GET VIDEO BY ID (PUBLIC)
+# =====================================================
 
 @videos_bp.route("/<uuid:video_id>", methods=["GET"])
 def get_public_video(video_id):
@@ -75,6 +76,10 @@ def get_member_videos(current_user):
 
     return jsonify([v.to_dict() for v in videos]), 200
 
+
+# =====================================================
+# GET VIDEO BY ID (MEMBER)
+# =====================================================
 
 @videos_bp.route("/member/<uuid:video_id>", methods=["GET"])
 @token_required
@@ -127,6 +132,9 @@ def create_video(current_admin):
 
     return jsonify(video.to_dict(admin_view=True)), 201
 
+# =====================================================
+# GET ALL VIDEOS (ADMIN)
+# =====================================================
 
 @videos_bp.route("/admin", methods=["GET"])
 @admin_token_required
@@ -140,6 +148,10 @@ def get_all_videos_admin(current_admin):
     return jsonify([v.to_dict(admin_view=True) for v in videos]), 200
 
 
+# =====================================================
+# GET VIDEO BY ID (ADMIN)
+# =====================================================
+
 @videos_bp.route("/admin/<uuid:video_id>", methods=["GET"])
 @admin_token_required
 def get_video_admin(current_admin, video_id):
@@ -149,6 +161,10 @@ def get_video_admin(current_admin, video_id):
 
     return jsonify(video.to_dict(admin_view=True)), 200
 
+
+# =====================================================
+# UPDATE VIDEO
+# =====================================================
 
 @videos_bp.route("/admin/<uuid:video_id>", methods=["PUT"])
 @admin_token_required
@@ -181,6 +197,9 @@ def update_video(current_admin, video_id):
 
     return jsonify(video.to_dict(admin_view=True)), 200
 
+# =====================================================
+# DELETE VIDEO (SOFT DELETE)
+# =====================================================
 
 @videos_bp.route("/admin/<uuid:video_id>", methods=["DELETE"])
 @admin_token_required
@@ -197,6 +216,8 @@ def delete_video(current_admin, video_id):
     db.session.commit()
 
     return jsonify({"message": "Video soft-deleted"}), 200
+
+
 
 """""""""""""""""
 
