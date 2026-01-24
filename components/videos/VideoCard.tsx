@@ -51,13 +51,19 @@ export default function VideoCard({ video }: { video: PublicVideo }) {
       }}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
+      onFocus={handleMouseEnter}
+      onBlur={handleMouseLeave}
       style={{
         width: 300,
         cursor: 'pointer',
-        transition: 'transform .2s ease, box-shadow .2s ease',
+        borderRadius: 16,
+        transition:
+          'transform 0.25s ease, box-shadow 0.25s ease',
+        transform: hovered ? 'translateY(-6px)' : 'none',
+        boxShadow: hovered
+          ? '0 18px 40px rgba(0,0,0,0.45)'
+          : '0 6px 18px rgba(0,0,0,0.25)',
       }}
-      onFocus={handleMouseEnter}
-      onBlur={handleMouseLeave}
     >
       {/* THUMBNAIL / PREVIEW */}
       <div
@@ -65,12 +71,12 @@ export default function VideoCard({ video }: { video: PublicVideo }) {
           position: 'relative',
           width: '100%',
           aspectRatio: '16 / 9',
-          borderRadius: 14,
+          borderRadius: 16,
           overflow: 'hidden',
           background: '#000',
         }}
       >
-        {/* POSTER IMAGE */}
+        {/* POSTER */}
         {!hovered && (
           <img
             src={video.poster_url}
@@ -85,7 +91,7 @@ export default function VideoCard({ video }: { video: PublicVideo }) {
           />
         )}
 
-        {/* HOVER PREVIEW VIDEO */}
+        {/* HOVER VIDEO */}
         {hovered && video.video_url && (
           <video
             ref={videoRef}
@@ -102,7 +108,66 @@ export default function VideoCard({ video }: { video: PublicVideo }) {
           />
         )}
 
-        {/* DURATION BADGE */}
+        {/* GRADIENT OVERLAY */}
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            background:
+              'linear-gradient(to top, rgba(0,0,0,0.55), rgba(0,0,0,0))',
+            pointerEvents: 'none',
+          }}
+        />
+
+        {/* PLAY ICON */}
+        {!hovered && (
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              opacity: 0.85,
+            }}
+          >
+            <div
+              style={{
+                width: 54,
+                height: 54,
+                borderRadius: '50%',
+                background: 'rgba(0,0,0,0.6)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: 22,
+                color: '#fff',
+              }}
+            >
+              ▶
+            </div>
+          </div>
+        )}
+
+        {/* TYPE BADGE */}
+        <div
+          style={{
+            position: 'absolute',
+            top: 8,
+            left: 8,
+            padding: '4px 8px',
+            fontSize: 11,
+            letterSpacing: 0.6,
+            borderRadius: 6,
+            background: 'rgba(0,0,0,0.65)',
+            color: '#fff',
+            textTransform: 'uppercase',
+          }}
+        >
+          {video.type}
+        </div>
+
+        {/* DURATION */}
         <div
           style={{
             position: 'absolute',
@@ -120,19 +185,24 @@ export default function VideoCard({ video }: { video: PublicVideo }) {
       </div>
 
       {/* META */}
-      <div style={{ paddingTop: 10 }}>
+      <div style={{ paddingTop: 12 }}>
         <div
           style={{
             fontWeight: 600,
             fontSize: 14,
-            lineHeight: 1.3,
+            lineHeight: 1.35,
             marginBottom: 4,
           }}
         >
           {video.title}
         </div>
 
-        <div style={{ fontSize: 12, opacity: 0.65 }}>
+        <div
+          style={{
+            fontSize: 12,
+            opacity: 0.65,
+          }}
+        >
           {video.subtitle ?? video.type}
         </div>
       </div>
@@ -142,10 +212,10 @@ export default function VideoCard({ video }: { video: PublicVideo }) {
 
 
 {/*
-// components/videos/VideoCard.tsx
 'use client';
 
 import { useRouter } from 'next/navigation';
+import { useRef, useState } from 'react';
 
 export type PublicVideo = {
   id: string;
@@ -153,6 +223,7 @@ export type PublicVideo = {
   subtitle?: string | null;
   description?: string | null;
   poster_url: string;
+  video_url?: string;
   duration?: string | null;
   aspect_ratio?: string | null;
   type: string;
@@ -162,6 +233,24 @@ export type PublicVideo = {
 
 export default function VideoCard({ video }: { video: PublicVideo }) {
   const router = useRouter();
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const [hovered, setHovered] = useState(false);
+
+  const handleMouseEnter = () => {
+    setHovered(true);
+    if (videoRef.current) {
+      videoRef.current.currentTime = 0;
+      videoRef.current.play().catch(() => {});
+    }
+  };
+
+  const handleMouseLeave = () => {
+    setHovered(false);
+    if (videoRef.current) {
+      videoRef.current.pause();
+      videoRef.current.currentTime = 0;
+    }
+  };
 
   return (
     <article
@@ -173,21 +262,17 @@ export default function VideoCard({ video }: { video: PublicVideo }) {
           router.push(`/videos/${video.id}`);
         }
       }}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
       style={{
         width: 300,
         cursor: 'pointer',
         transition: 'transform .2s ease, box-shadow .2s ease',
       }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.transform = 'translateY(-4px)';
-        e.currentTarget.style.boxShadow = '0 12px 28px rgba(0,0,0,0.25)';
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.transform = 'none';
-        e.currentTarget.style.boxShadow = 'none';
-      }}
+      onFocus={handleMouseEnter}
+      onBlur={handleMouseLeave}
     >
-     
+   
       <div
         style={{
           position: 'relative',
@@ -198,19 +283,36 @@ export default function VideoCard({ video }: { video: PublicVideo }) {
           background: '#000',
         }}
       >
-        <img
-          src={video.poster_url || '/placeholder.jpg'}
-          alt={video.title}
-          loading="lazy"
-          style={{
-            width: '100%',
-            height: '100%',
-            objectFit: 'cover',
-            display: 'block',
-          }}
-        />
+        {!hovered && (
+          <img
+            src={video.poster_url}
+            alt={video.title}
+            loading="lazy"
+            style={{
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover',
+              display: 'block',
+            }}
+          />
+        )}
 
-     
+        {hovered && video.video_url && (
+          <video
+            ref={videoRef}
+            src={video.video_url}
+            muted
+            playsInline
+            preload="metadata"
+            style={{
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover',
+              display: 'block',
+            }}
+          />
+        )}
+
         <div
           style={{
             position: 'absolute',
@@ -227,7 +329,6 @@ export default function VideoCard({ video }: { video: PublicVideo }) {
         </div>
       </div>
 
-    
       <div style={{ paddingTop: 10 }}>
         <div
           style={{
@@ -250,4 +351,5 @@ export default function VideoCard({ video }: { video: PublicVideo }) {
 
 
 
-   */}
+
+*/}
