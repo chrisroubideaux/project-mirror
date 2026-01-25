@@ -16,6 +16,13 @@ export type PublicVideo = {
   type: string;
   visibility: string;
   created_at: string;
+
+  // NEW
+  series_avatar_url?: string | null;
+
+  // OPTIONAL COSMETIC FIELDS
+  view_count?: number;
+  progress?: number; // 0 → 1
 };
 
 export default function VideoCard({ video }: { video: PublicVideo }) {
@@ -38,6 +45,15 @@ export default function VideoCard({ video }: { video: PublicVideo }) {
       videoRef.current.currentTime = 0;
     }
   };
+
+  const uploadDate = new Date(video.created_at);
+  const timeAgo = `${Math.max(
+    1,
+    Math.floor(
+      (Date.now() - uploadDate.getTime()) /
+        (1000 * 60 * 60 * 24)
+    )
+  )}d ago`;
 
   return (
     <article
@@ -63,6 +79,7 @@ export default function VideoCard({ video }: { video: PublicVideo }) {
         boxShadow: hovered
           ? '0 18px 40px rgba(0,0,0,0.45)'
           : '0 6px 18px rgba(0,0,0,0.25)',
+        background: 'transparent',
       }}
     >
       {/* THUMBNAIL / PREVIEW */}
@@ -76,7 +93,6 @@ export default function VideoCard({ video }: { video: PublicVideo }) {
           background: '#000',
         }}
       >
-        {/* POSTER */}
         {!hovered && (
           <img
             src={video.poster_url}
@@ -91,7 +107,6 @@ export default function VideoCard({ video }: { video: PublicVideo }) {
           />
         )}
 
-        {/* HOVER VIDEO */}
         {hovered && video.video_url && (
           <video
             ref={videoRef}
@@ -108,7 +123,7 @@ export default function VideoCard({ video }: { video: PublicVideo }) {
           />
         )}
 
-        {/* GRADIENT OVERLAY */}
+        {/* GRADIENT */}
         <div
           style={{
             position: 'absolute',
@@ -128,7 +143,6 @@ export default function VideoCard({ video }: { video: PublicVideo }) {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              opacity: 0.85,
             }}
           >
             <div
@@ -157,11 +171,11 @@ export default function VideoCard({ video }: { video: PublicVideo }) {
             left: 8,
             padding: '4px 8px',
             fontSize: 11,
-            letterSpacing: 0.6,
             borderRadius: 6,
             background: 'rgba(0,0,0,0.65)',
             color: '#fff',
             textTransform: 'uppercase',
+            letterSpacing: 0.6,
           }}
         >
           {video.type}
@@ -182,28 +196,106 @@ export default function VideoCard({ video }: { video: PublicVideo }) {
         >
           {video.duration ?? '—'}
         </div>
+
+        {/* CONTINUE WATCHING BAR */}
+        {typeof video.progress === 'number' && (
+          <div
+            style={{
+              position: 'absolute',
+              bottom: 0,
+              left: 0,
+              height: 4,
+              width: '100%',
+              background: 'rgba(255,255,255,0.2)',
+            }}
+          >
+            <div
+              style={{
+                height: '100%',
+                width: `${Math.min(
+                  100,
+                  Math.max(0, video.progress * 100)
+                )}%`,
+                background: '#00e0ff',
+              }}
+            />
+          </div>
+        )}
       </div>
 
-      {/* META */}
-      <div style={{ paddingTop: 12 }}>
-        <div
-          style={{
-            fontWeight: 600,
-            fontSize: 14,
-            lineHeight: 1.35,
-            marginBottom: 4,
-          }}
-        >
-          {video.title}
-        </div>
+      {/* META ROW */}
+      <div
+        style={{
+          display: 'flex',
+          gap: 10,
+          paddingTop: 12,
+        }}
+      >
+        {/* SERIES / CHANNEL AVATAR */}
+        {video.series_avatar_url ? (
+          <img
+            src={video.series_avatar_url}
+            alt="Series avatar"
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: '50%',
+              objectFit: 'cover',
+              flexShrink: 0,
+            }}
+          />
+        ) : (
+          <div
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: '50%',
+              background: '#222',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: 14,
+              fontWeight: 600,
+              color: '#fff',
+              flexShrink: 0,
+            }}
+          >
+            {video.title.charAt(0)}
+          </div>
+        )}
 
-        <div
-          style={{
-            fontSize: 12,
-            opacity: 0.65,
-          }}
-        >
-          {video.subtitle ?? video.type}
+        {/* TEXT */}
+        <div style={{ flex: 1 }}>
+          <div
+            style={{
+              fontWeight: 600,
+              fontSize: 14,
+              lineHeight: 1.35,
+              marginBottom: 4,
+            }}
+          >
+            {video.title}
+          </div>
+
+          <div
+            style={{
+              fontSize: 12,
+              opacity: 0.65,
+            }}
+          >
+            {video.subtitle ?? video.type}
+          </div>
+
+          <div
+            style={{
+              fontSize: 11,
+              opacity: 0.5,
+              marginTop: 2,
+            }}
+          >
+            {(video.view_count ?? 0).toLocaleString()} views •{' '}
+            {timeAgo}
+          </div>
         </div>
       </div>
     </article>
@@ -212,6 +304,7 @@ export default function VideoCard({ video }: { video: PublicVideo }) {
 
 
 {/*
+// components/videos/VideoCard.tsx
 'use client';
 
 import { useRouter } from 'next/navigation';
@@ -229,6 +322,10 @@ export type PublicVideo = {
   type: string;
   visibility: string;
   created_at: string;
+
+  // OPTIONAL COSMETIC FIELDS (safe defaults)
+  view_count?: number;
+  progress?: number; // 0 → 1 (continue watching)
 };
 
 export default function VideoCard({ video }: { video: PublicVideo }) {
@@ -252,6 +349,15 @@ export default function VideoCard({ video }: { video: PublicVideo }) {
     }
   };
 
+  const uploadDate = new Date(video.created_at);
+  const timeAgo = `${Math.max(
+    1,
+    Math.floor(
+      (Date.now() - uploadDate.getTime()) /
+        (1000 * 60 * 60 * 24)
+    )
+  )}d ago`;
+
   return (
     <article
       role="button"
@@ -264,21 +370,27 @@ export default function VideoCard({ video }: { video: PublicVideo }) {
       }}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
+      onFocus={handleMouseEnter}
+      onBlur={handleMouseLeave}
       style={{
         width: 300,
         cursor: 'pointer',
-        transition: 'transform .2s ease, box-shadow .2s ease',
+        borderRadius: 16,
+        transition:
+          'transform 0.25s ease, box-shadow 0.25s ease',
+        transform: hovered ? 'translateY(-6px)' : 'none',
+        boxShadow: hovered
+          ? '0 18px 40px rgba(0,0,0,0.45)'
+          : '0 6px 18px rgba(0,0,0,0.25)',
+        background: 'transparent',
       }}
-      onFocus={handleMouseEnter}
-      onBlur={handleMouseLeave}
     >
-   
       <div
         style={{
           position: 'relative',
           width: '100%',
           aspectRatio: '16 / 9',
-          borderRadius: 14,
+          borderRadius: 16,
           overflow: 'hidden',
           background: '#000',
         }}
@@ -316,6 +428,103 @@ export default function VideoCard({ video }: { video: PublicVideo }) {
         <div
           style={{
             position: 'absolute',
+            inset: 0,
+            background:
+              'linear-gradient(to top, rgba(0,0,0,0.55), rgba(0,0,0,0))',
+            pointerEvents: 'none',
+          }}
+        />
+
+        {!hovered && (
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <div
+              style={{
+                width: 54,
+                height: 54,
+                borderRadius: '50%',
+                background: 'rgba(0,0,0,0.6)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: 22,
+                color: '#fff',
+              }}
+            >
+              ▶
+            </div>
+          </div>
+        )}
+
+        <div
+          style={{
+            position: 'absolute',
+            top: 8,
+            left: 8,
+            padding: '4px 8px',
+            fontSize: 11,
+            borderRadius: 6,
+            background: 'rgba(0,0,0,0.65)',
+            color: '#fff',
+            textTransform: 'uppercase',
+            letterSpacing: 0.6,
+          }}
+        >
+          {video.type}
+        </div>
+
+        {hovered && (
+          <div
+            style={{
+              position: 'absolute',
+              top: 8,
+              right: 8,
+              display: 'flex',
+              gap: 8,
+            }}
+          >
+            <button
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: '50%',
+                background: 'rgba(0,0,0,0.65)',
+                border: 'none',
+                color: '#fff',
+                cursor: 'pointer',
+              }}
+              aria-label="Save"
+            >
+              ＋
+            </button>
+
+            <button
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: '50%',
+                background: 'rgba(0,0,0,0.65)',
+                border: 'none',
+                color: '#fff',
+                cursor: 'pointer',
+              }}
+              aria-label="More"
+            >
+              ⋯
+            </button>
+          </div>
+        )}
+
+        <div
+          style={{
+            position: 'absolute',
             bottom: 8,
             right: 8,
             padding: '4px 8px',
@@ -327,28 +536,95 @@ export default function VideoCard({ video }: { video: PublicVideo }) {
         >
           {video.duration ?? '—'}
         </div>
+
+        {typeof video.progress === 'number' && (
+          <div
+            style={{
+              position: 'absolute',
+              bottom: 0,
+              left: 0,
+              height: 4,
+              width: '100%',
+              background: 'rgba(255,255,255,0.2)',
+            }}
+          >
+            <div
+              style={{
+                height: '100%',
+                width: `${Math.min(
+                  100,
+                  Math.max(0, video.progress * 100)
+                )}%`,
+                background: '#00e0ff',
+              }}
+            />
+          </div>
+        )}
       </div>
 
-      <div style={{ paddingTop: 10 }}>
+      <div
+        style={{
+          display: 'flex',
+          gap: 10,
+          paddingTop: 12,
+        }}
+      >
+     
         <div
           style={{
-            fontWeight: 600,
+            width: 36,
+            height: 36,
+            borderRadius: '50%',
+            background: '#222',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
             fontSize: 14,
-            lineHeight: 1.3,
-            marginBottom: 4,
+            fontWeight: 600,
+            color: '#fff',
+            flexShrink: 0,
           }}
         >
-          {video.title}
+          {video.title.charAt(0)}
         </div>
 
-        <div style={{ fontSize: 12, opacity: 0.65 }}>
-          {video.subtitle ?? video.type}
+        <div style={{ flex: 1 }}>
+          <div
+            style={{
+              fontWeight: 600,
+              fontSize: 14,
+              lineHeight: 1.35,
+              marginBottom: 4,
+            }}
+          >
+            {video.title}
+          </div>
+
+          <div
+            style={{
+              fontSize: 12,
+              opacity: 0.65,
+            }}
+          >
+            {video.subtitle ?? video.type}
+          </div>
+
+         
+          <div
+            style={{
+              fontSize: 11,
+              opacity: 0.5,
+              marginTop: 2,
+            }}
+          >
+            {(video.view_count ?? 0).toLocaleString()} views •{' '}
+            {timeAgo}
+          </div>
         </div>
       </div>
     </article>
   );
 }
-
 
 
 

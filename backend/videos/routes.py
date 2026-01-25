@@ -181,6 +181,7 @@ def update_video(current_admin, video_id):
         "description",
         "poster_url",
         "video_url",
+        "series_avatar_url",
         "duration",
         "aspect_ratio",
         "type",
@@ -217,6 +218,21 @@ def delete_video(current_admin, video_id):
 
     return jsonify({"message": "Video soft-deleted"}), 200
 
+# -------------------------------------
+
+
+@videos_bp.route("/<uuid:video_id>/view", methods=["POST"])
+def register_view(video_id):
+    video = Video.query.get(video_id)
+
+    if not video or not video.is_active:
+        return jsonify({"error": "Video not found"}), 404
+
+    video.view_count += 1
+    video.updated_at = datetime.utcnow()
+
+    db.session.commit()
+    return jsonify({"ok": True}), 200
 
 
 """""""""""""""""

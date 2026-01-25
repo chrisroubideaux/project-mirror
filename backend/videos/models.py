@@ -37,6 +37,7 @@ class Video(db.Model):
 
     duration = db.Column(db.String(20))          # "0:42"
     aspect_ratio = db.Column(db.String(20), default="16:9")
+    series_avatar_url = db.Column(db.String(512), nullable=True)
 
     # =============================
     # Classification
@@ -102,6 +103,7 @@ class Video(db.Model):
             "description": self.description,
             "poster_url": self.poster_url,
             "video_url": self.video_url,
+            "series_avatar_url": self.series_avatar_url,  # 👈 ADD THIS
             "duration": self.duration,
             "aspect_ratio": self.aspect_ratio,
             "type": self.type,
