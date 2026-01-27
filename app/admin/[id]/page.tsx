@@ -11,6 +11,10 @@ import VideosTab from '@/components/admin/videos/VideosTab';
 import StatCards from '@/components/admin/stats/StatCards';
 import RecentActivity from '@/components/admin/stats/RecentActivity';
 
+/* --------------------------------------------------
+   Config
+-------------------------------------------------- */
+
 const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000';
 
@@ -29,7 +33,8 @@ type AdminProfile = {
 export type AdminSidebarTab =
   | 'dashboard'
   | 'upload'
-  | 'videos';
+  | 'videos'
+  | 'charts';
 
 /* --------------------------------------------------
    Page
@@ -115,9 +120,9 @@ export default function AdminPage() {
     <div className="layout min-vh-100">
       <div className="container-fluid">
         <div className="row g-0">
-          {/* ---------------------------------
+          {/* =================================
               Sidebar
-          --------------------------------- */}
+          ================================= */}
           <div className="col-auto">
             <AdminSidebar
               adminId={admin.id}
@@ -128,9 +133,9 @@ export default function AdminPage() {
             />
           </div>
 
-          {/* ---------------------------------
+          {/* =================================
               Main Content
-          --------------------------------- */}
+          ================================= */}
           <div className="col p-4">
             <AnimatePresence mode="wait">
               <motion.div
@@ -146,10 +151,7 @@ export default function AdminPage() {
                 ============================= */}
                 {activeTab === 'dashboard' && (
                   <>
-                    {/* 🔹 STAT CARDS */}
                     <StatCards />
-
-                    {/* 🔹 RECENT ACTIVITY */}
                     <RecentActivity />
                   </>
                 )}
@@ -163,6 +165,31 @@ export default function AdminPage() {
                     VIDEOS
                 ============================= */}
                 {activeTab === 'videos' && <VideosTab />}
+
+                {/* =============================
+                    CHARTS (next)
+                ============================= */}
+                {activeTab === 'charts' && (
+                  <div
+                    className="flex-grow-1 d-flex align-items-center justify-content-center"
+                    style={{
+                      borderRadius: 20,
+                      border:
+                        '1px dashed var(--aurora-bento-border)',
+                      background: 'var(--aurora-bento-bg)',
+                      opacity: 0.6,
+                    }}
+                  >
+                    <div className="text-center">
+                      <h5 className="fw-light mb-2">
+                        Analytics Charts
+                      </h5>
+                      <p className="mb-0">
+                        Views over time · Growth · Trends
+                      </p>
+                    </div>
+                  </div>
+                )}
               </motion.div>
             </AnimatePresence>
           </div>
