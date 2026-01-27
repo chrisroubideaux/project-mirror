@@ -30,7 +30,7 @@
     "react-redux": "^9.2.0",
     "react-toastify": "^11.0.5",
     "react-webcam": "^7.2.0",
-    "recharts": "^3.3.0",
+    "recharts": "^3.7.0",
     "redux-persist": "^6.0.0"
   },
   "devDependencies": {
