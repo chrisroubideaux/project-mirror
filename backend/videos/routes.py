@@ -1,5 +1,7 @@
 # backend/videos/routes.py
 
+# backend/videos/routes.py
+
 from datetime import datetime
 from flask import Blueprint, jsonify, request, current_app
 from extensions import db
@@ -445,8 +447,101 @@ def get_views_weekly(current_admin):
         }
         for r in results
     ]), 200
+    
+    
+# =====================================================
+# ADMIN ANALYTICS — VIEWS OVER TIME (WEEKLY, EVENT-BASED)
+# =====================================================
 
+@videos_bp.route("/admin/views/weekly/events", methods=["GET"])
+@admin_token_required
+def get_views_weekly_events(current_admin):
+    """
+    Weekly total views across the platform (true event data).
+    """
+    weeks = request.args.get("weeks", 12, type=int)
 
+    results = (
+        db.session.query(
+            func.date_trunc("week", VideoView.created_at).label("week"),
+            func.count(VideoView.id).label("views"),
+        )
+        .group_by(func.date_trunc("week", VideoView.created_at))
+        .order_by(func.date_trunc("week", VideoView.created_at).desc())
+        .limit(weeks)
+        .all()
+    )
+
+    results = list(reversed(results))  # chart-friendly order
+
+    return jsonify([
+        {
+            "week": r.week.date().isoformat(),
+            "views": int(r.views),
+        }
+        for r in results
+    ]), 200
+# =====================================================
+# ADMIN ANALYTICS — PER VIDEO SUMMARY
+# =====================================================
+
+@videos_bp.route("/admin/video/<uuid:video_id>/analytics", methods=["GET"])
+@admin_token_required
+def get_video_analytics(current_admin, video_id):
+    video = Video.query.get(video_id)
+    if not video:
+        return jsonify({"error": "Video not found"}), 404
+
+    total_views = (
+        db.session.query(func.count(VideoView.id))
+        .filter(VideoView.video_id == video.id)
+        .scalar()
+    ) or 0
+
+    guest_views = (
+        db.session.query(func.count(VideoView.id))
+        .filter(
+            VideoView.video_id == video.id,
+            VideoView.user_id.is_(None)
+        )
+        .scalar()
+    ) or 0
+
+    return jsonify({
+        "video": video.to_dict(admin_view=True),
+        "total_views": total_views,
+        "guest_views": guest_views,
+        "member_views": total_views - guest_views,
+    }), 200
+# =====================================================
+# ADMIN ANALYTICS — PER VIDEO VIEWS (DAILY)
+# =====================================================
+
+@videos_bp.route("/admin/video/<uuid:video_id>/views/daily", methods=["GET"])
+@admin_token_required
+def get_video_views_daily(current_admin, video_id):
+    days = request.args.get("days", 30, type=int)
+
+    results = (
+        db.session.query(
+            cast(VideoView.created_at, Date).label("date"),
+            func.count(VideoView.id).label("views"),
+        )
+        .filter(VideoView.video_id == video_id)
+        .group_by(cast(VideoView.created_at, Date))
+        .order_by(cast(VideoView.created_at, Date).desc())
+        .limit(days)
+        .all()
+    )
+
+    results = list(reversed(results))
+
+    return jsonify([
+        {"date": r.date.isoformat(), "views": int(r.views)}
+        for r in results
+    ]), 200
+
+    
 """""""""""""""""
 
 from datetime import datetime
