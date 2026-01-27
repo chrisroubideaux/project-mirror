@@ -5,6 +5,17 @@ from flask import Blueprint, jsonify, request
 from extensions import db
 from .models import Video
 
+from time import time
+from flask import request
+# -------------------------------------
+# Simple in-memory view throttle
+# key = (ip, video_id)
+# value = timestamp
+# -------------------------------------
+
+VIEW_THROTTLE_SECONDS = 30
+view_throttle_cache = {}
+
 # Auth decorators
 from utils.decorators import token_required
 from admin.decorators import admin_token_required
@@ -218,9 +229,43 @@ def delete_video(current_admin, video_id):
 
     return jsonify({"message": "Video soft-deleted"}), 200
 
-# -------------------------------------
+# =====================================================
+# REGISTER VIDEO VIEW
+# =====================================================
+
+@videos_bp.route("/<uuid:video_id>/view", methods=["POST"])
+def register_view(video_id):
+    video = Video.query.get(video_id)
+
+    if not video or not video.is_active:
+        return jsonify({"error": "Video not found"}), 404
+
+    ip = request.headers.get("X-Forwarded-For", request.remote_addr)
+    now = time()
+    key = (ip, str(video_id))
+
+    last_view = view_throttle_cache.get(key)
+
+    if last_view and now - last_view < VIEW_THROTTLE_SECONDS:
+        return jsonify({
+            "ok": True,
+            "throttled": True
+        }), 200
+
+    # Record view
+    view_throttle_cache[key] = now
+    video.view_count += 1
+    video.updated_at = datetime.utcnow()
+
+    db.session.commit()
+
+    return jsonify({
+        "ok": True,
+        "throttled": False
+    }), 200
 
 
+"""""""""""""""""""""""""""
 @videos_bp.route("/<uuid:video_id>/view", methods=["POST"])
 def register_view(video_id):
     video = Video.query.get(video_id)
@@ -233,6 +278,89 @@ def register_view(video_id):
 
     db.session.commit()
     return jsonify({"ok": True}), 200
+"""""""""""""""""""""""""""""""""
+# =====================================================
+# ADMIN ANALYTICS — TOP VIDEOS
+# =====================================================
+
+@videos_bp.route("/admin/top", methods=["GET"])
+@admin_token_required
+def get_top_videos(current_admin):
+    limit = request.args.get("limit", 10, type=int)
+
+    videos = (
+        Video.query
+        .filter(Video.is_active.is_(True))
+        .order_by(Video.view_count.desc())
+        .limit(limit)
+        .all()
+    )
+
+    return jsonify([
+        v.to_dict(admin_view=True) for v in videos
+    ]), 200
+
+# =====================================================
+# ADMIN ANALYTICS — RECENT ACTIVITY
+# =====================================================
+
+@videos_bp.route("/admin/recent", methods=["GET"])
+@admin_token_required
+def get_recent_videos(current_admin):
+    limit = request.args.get("limit", 10, type=int)
+
+    videos = (
+        Video.query
+        .filter(Video.is_active.is_(True))
+        .order_by(Video.updated_at.desc())
+        .limit(limit)
+        .all()
+    )
+
+    return jsonify([
+        v.to_dict(admin_view=True) for v in videos
+    ]), 200
+    
+    
+# =====================================================
+# ADMIN ANALYTICS — PLATFORM STATS
+# =====================================================
+
+@videos_bp.route("/admin/stats", methods=["GET"])
+@admin_token_required
+def get_video_stats(current_admin):
+    total_videos = Video.query.count()
+    active_videos = Video.query.filter(Video.is_active.is_(True)).count()
+
+    total_views = (
+        db.session.query(
+            db.func.coalesce(db.func.sum(Video.view_count), 0)
+        ).scalar()
+    )
+
+    top_video = (
+        Video.query
+        .filter(Video.is_active.is_(True))
+        .order_by(Video.view_count.desc())
+        .first()
+    )
+
+    avg_views = (
+        round(total_views / active_videos, 2)
+        if active_videos > 0
+        else 0
+    )
+
+    return jsonify({
+        "total_videos": total_videos,
+        "active_videos": active_videos,
+        "total_views": total_views,
+        "average_views_per_video": avg_views,
+        "most_viewed_video": (
+            top_video.to_dict(admin_view=True)
+            if top_video else None
+        ),
+    }), 200
 
 
 """""""""""""""""
