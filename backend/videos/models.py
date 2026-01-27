@@ -124,3 +124,48 @@ class Video(db.Model):
 
     def __repr__(self):
         return f"<Video {self.title}>"
+    
+# =============================
+# Per-view analytics (NEW)
+# =============================
+
+class VideoView(db.Model):
+    __tablename__ = "video_views"
+
+    id = db.Column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4
+    )
+
+    video_id = db.Column(
+        UUID(as_uuid=True),
+        db.ForeignKey("videos.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True
+    )
+
+    # NULL = guest view
+    user_id = db.Column(
+        UUID(as_uuid=True),
+        nullable=True,
+        index=True
+    )
+
+    ip_address = db.Column(db.String(64), nullable=True)
+
+    created_at = db.Column(
+        db.DateTime,
+        default=datetime.utcnow,
+        index=True
+    )
+
+    # Optional relationship (nice to have)
+    video = db.relationship(
+        "Video",
+        backref=db.backref("view_events", lazy="dynamic")
+    )
+
+    def __repr__(self):
+        return f"<VideoView video={self.video_id} at={self.created_at}>"
+
