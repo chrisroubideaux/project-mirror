@@ -1,10 +1,11 @@
 # backend/videos/routes.py
 
 from datetime import datetime
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, current_app
 from extensions import db
-from .models import Video
-
+from .models import Video, VideoView
+from sqlalchemy import func, cast, Date
+import jwt
 from time import time
 from flask import request
 # -------------------------------------
@@ -25,6 +26,41 @@ videos_bp = Blueprint(
     __name__,
     url_prefix="/api/videos"
 )
+
+# =====================================================
+# Per-view analytics (NEW)
+# =====================================================
+
+def _get_optional_user_id_from_bearer():
+    """
+    If Authorization: Bearer <token> exists and is valid, return user_id as UUID string.
+    If missing/invalid -> return None (guest).
+    """
+    auth = request.headers.get("Authorization", "")
+    if not auth.startswith("Bearer "):
+        return None
+
+    token = auth.replace("Bearer ", "").strip()
+    if not token:
+        return None
+
+    try:
+        # Adjust this if your app uses a different config key name
+        secret = (
+            current_app.config.get("SECRET_KEY")
+            or current_app.config.get("DB_SECRET_KEY")
+        )
+        if not secret:
+            return None
+
+        payload = jwt.decode(token, secret, algorithms=["HS256"])
+
+        # Common patterns: "user_id" or "sub"
+        user_id = payload.get("user_id") or payload.get("sub")
+        return str(user_id) if user_id else None
+    except Exception:
+        return None
+
 
 # =====================================================
 # PUBLIC ROUTES (GUESTS)
@@ -232,7 +268,6 @@ def delete_video(current_admin, video_id):
 # =====================================================
 # REGISTER VIDEO VIEW
 # =====================================================
-
 @videos_bp.route("/<uuid:video_id>/view", methods=["POST"])
 def register_view(video_id):
     video = Video.query.get(video_id)
@@ -240,45 +275,42 @@ def register_view(video_id):
     if not video or not video.is_active:
         return jsonify({"error": "Video not found"}), 404
 
+    # ---------------------------
+    # Throttle by IP + video_id
+    # ---------------------------
     ip = request.headers.get("X-Forwarded-For", request.remote_addr)
     now = time()
     key = (ip, str(video_id))
 
     last_view = view_throttle_cache.get(key)
+    if last_view and (now - last_view) < VIEW_THROTTLE_SECONDS:
+        return jsonify({"ok": True, "throttled": True}), 200
 
-    if last_view and now - last_view < VIEW_THROTTLE_SECONDS:
-        return jsonify({
-            "ok": True,
-            "throttled": True
-        }), 200
-
-    # Record view
     view_throttle_cache[key] = now
-    video.view_count += 1
+
+    # ---------------------------
+    # Optional user capture
+    # ---------------------------
+    user_id = _get_optional_user_id_from_bearer()  # None = guest
+
+    # ---------------------------
+    # Persist: event row + counter
+    # ---------------------------
+    db.session.add(VideoView(
+        video_id=video.id,
+        user_id=user_id,         # NULL = guest
+        ip_address=ip,
+        created_at=datetime.utcnow(),
+    ))
+
+    video.view_count = (video.view_count or 0) + 1
     video.updated_at = datetime.utcnow()
 
     db.session.commit()
 
-    return jsonify({
-        "ok": True,
-        "throttled": False
-    }), 200
+    return jsonify({"ok": True, "throttled": False}), 200
 
 
-"""""""""""""""""""""""""""
-@videos_bp.route("/<uuid:video_id>/view", methods=["POST"])
-def register_view(video_id):
-    video = Video.query.get(video_id)
-
-    if not video or not video.is_active:
-        return jsonify({"error": "Video not found"}), 404
-
-    video.view_count += 1
-    video.updated_at = datetime.utcnow()
-
-    db.session.commit()
-    return jsonify({"ok": True}), 200
-"""""""""""""""""""""""""""""""""
 # =====================================================
 # ADMIN ANALYTICS — TOP VIDEOS
 # =====================================================
@@ -361,6 +393,58 @@ def get_video_stats(current_admin):
             if top_video else None
         ),
     }), 200
+    
+    
+# =====================================================
+# ADMIN ANALYTICS — VIEWS OVER TIME (DAILY)
+# =====================================================
+
+@videos_bp.route("/admin/views/daily", methods=["GET"])
+@admin_token_required
+def get_views_daily(current_admin):
+    results = (
+        db.session.query(
+            cast(Video.updated_at, Date).label("date"),
+            func.sum(Video.view_count).label("views"),
+        )
+        .filter(Video.is_active.is_(True))
+        .group_by(cast(Video.updated_at, Date))
+        .order_by(cast(Video.updated_at, Date))
+        .all()
+    )
+
+    return jsonify([
+        {
+            "date": r.date.isoformat(),
+            "views": int(r.views or 0),
+        }
+        for r in results
+    ]), 200
+# =====================================================
+# ADMIN ANALYTICS — VIEWS OVER TIME (WEEKLY)
+# =====================================================
+
+@videos_bp.route("/admin/views/weekly", methods=["GET"])
+@admin_token_required
+def get_views_weekly(current_admin):
+    results = (
+        db.session.query(
+            func.date_trunc("week", Video.updated_at).label("week"),
+            func.sum(Video.view_count).label("views"),
+        )
+        .filter(Video.is_active.is_(True))
+        .group_by(func.date_trunc("week", Video.updated_at))
+        .order_by(func.date_trunc("week", Video.updated_at))
+        .all()
+    )
+
+    return jsonify([
+        {
+            "week": r.week.date().isoformat(),
+            "views": int(r.views or 0),
+        }
+        for r in results
+    ]), 200
 
 
 """""""""""""""""

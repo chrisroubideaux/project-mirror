@@ -10,6 +10,7 @@ import UploadTab from '@/components/admin/uploads/UploadTab';
 import VideosTab from '@/components/admin/videos/VideosTab';
 import StatCards from '@/components/admin/stats/StatCards';
 import RecentActivity from '@/components/admin/stats/RecentActivity';
+import ChartsPanel from '@/components/admin/stats/ChartsPanel';
 
 /* --------------------------------------------------
    Config
@@ -64,7 +65,6 @@ export default function AdminPage() {
     }
 
     const token = localStorage.getItem(ADMIN_TOKEN_KEY);
-
     if (!token) {
       router.replace('/admin/login');
       return;
@@ -120,9 +120,9 @@ export default function AdminPage() {
     <div className="layout min-vh-100">
       <div className="container-fluid">
         <div className="row g-0">
-          {/* =================================
+          {/* ===============================
               Sidebar
-          ================================= */}
+          =============================== */}
           <div className="col-auto">
             <AdminSidebar
               adminId={admin.id}
@@ -133,9 +133,9 @@ export default function AdminPage() {
             />
           </div>
 
-          {/* =================================
+          {/* ===============================
               Main Content
-          ================================= */}
+          =============================== */}
           <div className="col p-4">
             <AnimatePresence mode="wait">
               <motion.div
@@ -167,28 +167,10 @@ export default function AdminPage() {
                 {activeTab === 'videos' && <VideosTab />}
 
                 {/* =============================
-                    CHARTS (next)
+                    CHARTS
                 ============================= */}
                 {activeTab === 'charts' && (
-                  <div
-                    className="flex-grow-1 d-flex align-items-center justify-content-center"
-                    style={{
-                      borderRadius: 20,
-                      border:
-                        '1px dashed var(--aurora-bento-border)',
-                      background: 'var(--aurora-bento-bg)',
-                      opacity: 0.6,
-                    }}
-                  >
-                    <div className="text-center">
-                      <h5 className="fw-light mb-2">
-                        Analytics Charts
-                      </h5>
-                      <p className="mb-0">
-                        Views over time · Growth · Trends
-                      </p>
-                    </div>
-                  </div>
+                  <ChartsPanel />
                 )}
               </motion.div>
             </AnimatePresence>
@@ -212,11 +194,16 @@ import AdminSidebar from '@/components/admin/sidebar/AdminSidebar';
 import UploadTab from '@/components/admin/uploads/UploadTab';
 import VideosTab from '@/components/admin/videos/VideosTab';
 import StatCards from '@/components/admin/stats/StatCards';
+import RecentActivity from '@/components/admin/stats/RecentActivity';
+import ViewsBarChart from '@/components/admin/stats/ViewsBarChart';
+
+
 
 const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000';
 
 const ADMIN_TOKEN_KEY = 'aurora_admin_token';
+
 
 
 type AdminProfile = {
@@ -228,7 +215,8 @@ type AdminProfile = {
 export type AdminSidebarTab =
   | 'dashboard'
   | 'upload'
-  | 'videos';
+  | 'videos'
+  | 'charts';
 
 
 
@@ -240,6 +228,7 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] =
     useState<AdminSidebarTab>('dashboard');
+
 
   useEffect(() => {
     const tokenFromURL =
@@ -281,12 +270,13 @@ export default function AdminPage() {
     })();
   }, [searchParams, router]);
 
-  
+ 
   const handleLogout = () => {
     localStorage.removeItem(ADMIN_TOKEN_KEY);
     router.push('/admin/login');
   };
 
+ 
   if (loading) {
     return (
       <div className="p-4">
@@ -297,12 +287,11 @@ export default function AdminPage() {
 
   if (!admin) return null;
 
- 
   return (
     <div className="layout min-vh-100">
       <div className="container-fluid">
         <div className="row g-0">
-         
+          
           <div className="col-auto">
             <AdminSidebar
               adminId={admin.id}
@@ -313,7 +302,7 @@ export default function AdminPage() {
             />
           </div>
 
-        
+   
           <div className="col p-4">
             <AnimatePresence mode="wait">
               <motion.div
@@ -327,37 +316,25 @@ export default function AdminPage() {
                 
                 {activeTab === 'dashboard' && (
                   <>
-                   
                     <StatCards />
-
-                  
-                    <div
-                      className="flex-grow-1 d-flex align-items-center justify-content-center"
-                      style={{
-                        borderRadius: 20,
-                        border:
-                          '1px dashed var(--aurora-bento-border)',
-                        background: 'var(--aurora-bento-bg)',
-                        opacity: 0.55,
-                      }}
-                    >
-                      <div className="text-center">
-                        <h5 className="fw-light mb-2">
-                          Analytics Dashboard
-                        </h5>
-                        <p className="mb-0">
-                          Top videos · Trends · Charts coming next
-                        </p>
-                      </div>
-                    </div>
+                    <RecentActivity />
                   </>
                 )}
 
-             
+                
                 {activeTab === 'upload' && <UploadTab />}
 
-              
+                
                 {activeTab === 'videos' && <VideosTab />}
+
+              
+                {activeTab === 'charts' && (
+                  
+                    
+                        <ViewsBarChart />
+                      
+                  
+                )}
               </motion.div>
             </AnimatePresence>
           </div>
@@ -366,7 +343,6 @@ export default function AdminPage() {
     </div>
   );
 }
-
 
 
 
