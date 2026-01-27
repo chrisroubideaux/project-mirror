@@ -2,7 +2,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useRef, useState } from 'react';
+import { useRef, useState, useEffect } from 'react';
 
 export type PublicVideo = {
   id: string;
@@ -29,6 +29,14 @@ export default function VideoCard({ video }: { video: PublicVideo }) {
   const router = useRouter();
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [hovered, setHovered] = useState(false);
+
+useEffect(() => {
+  fetch(
+    `http://localhost:5000/api/videos/${video.id}/view`,
+    { method: 'POST' }
+  ).catch(() => {});
+}, [video.id]);
+
 
   const handleMouseEnter = () => {
     setHovered(true);
