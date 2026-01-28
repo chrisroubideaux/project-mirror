@@ -1,5 +1,5 @@
 // components/admin/stats/VideoAnalyticsPanel.tsx
-// components/admin/stats/VideoAnalyticsPanel.tsx
+
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
