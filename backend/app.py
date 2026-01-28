@@ -16,6 +16,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 # ----------------------------------------------------
 from extensions import db, jwt, limiter
 
+
 # ----------------------------------------------------
 # Models (needed for migrations / Alembic discovery)
 # ----------------------------------------------------
@@ -143,7 +144,6 @@ def create_app():
         return jsonify({"message": "Mirror Backend Running"}), 200
 
     return app
-
 
 if __name__ == "__main__":
     app = create_app()

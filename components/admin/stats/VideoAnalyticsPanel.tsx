@@ -2,6 +2,16 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import {
+  LineChart,
+  Line,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+} from 'recharts';
 
 const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000';
@@ -11,14 +21,7 @@ type Video = {
   id: string;
   title: string;
   subtitle?: string | null;
-  description?: string | null;
   poster_url: string;
-  video_url: string;
-  view_count: number;
-  like_count: number;
-  created_at: string;
-  updated_at?: string;
-  is_active?: boolean;
 };
 
 type AnalyticsResponse = {
@@ -26,6 +29,11 @@ type AnalyticsResponse = {
   total_views: number;
   guest_views: number;
   member_views: number;
+};
+
+type DailyPoint = {
+  date: string;
+  views: number;
 };
 
 type Props = {
@@ -36,68 +44,78 @@ type Props = {
 export default function VideoAnalyticsPanel({ videoId, onClose }: Props) {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<AnalyticsResponse | null>(null);
+  const [daily, setDaily] = useState<DailyPoint[]>([]);
 
   const token = useMemo(
-    () => (typeof window !== 'undefined' ? localStorage.getItem(ADMIN_TOKEN_KEY) : null),
+    () =>
+      typeof window !== 'undefined'
+        ? localStorage.getItem(ADMIN_TOKEN_KEY)
+        : null,
     []
   );
 
-  // ---------------------------------------------
-  // Close on ESC + lock scroll
-  // ---------------------------------------------
+  /* ---------------------------------------------
+     Lock scroll + ESC close
+  --------------------------------------------- */
   useEffect(() => {
-    const prevOverflow = document.body.style.overflow;
+    const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
 
-    const onKeyDown = (e: KeyboardEvent) => {
+    const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
     };
 
-    window.addEventListener('keydown', onKeyDown);
-
+    window.addEventListener('keydown', onKey);
     return () => {
-      document.body.style.overflow = prevOverflow;
-      window.removeEventListener('keydown', onKeyDown);
+      document.body.style.overflow = prev;
+      window.removeEventListener('keydown', onKey);
     };
   }, [onClose]);
 
-  // ---------------------------------------------
-  // Fetch analytics
-  // ---------------------------------------------
+  /* ---------------------------------------------
+     Fetch analytics + daily views
+  --------------------------------------------- */
   useEffect(() => {
     if (!token) return;
 
     setLoading(true);
 
-    fetch(`${API_BASE}/api/videos/admin/video/${videoId}/analytics`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then(res => res.json())
-      .then(res => {
-        setData(res);
+    Promise.all([
+      fetch(`${API_BASE}/api/videos/admin/video/${videoId}/analytics`, {
+        headers: { Authorization: `Bearer ${token}` },
+      }).then(res => res.json()),
+
+      fetch(
+        `${API_BASE}/api/videos/admin/video/${videoId}/views/daily`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      ).then(res => res.json()),
+    ])
+      .then(([analytics, dailyViews]) => {
+        setData(analytics);
+        setDaily(dailyViews);
       })
       .catch(err => {
         console.error(err);
         setData(null);
+        setDaily([]);
       })
       .finally(() => setLoading(false));
   }, [videoId, token]);
 
-  // ---------------------------------------------
-  // Render
-  // ---------------------------------------------
+  /* ---------------------------------------------
+     Render
+  --------------------------------------------- */
   return (
     <div
-      role="dialog"
-      aria-modal="true"
       className="position-fixed top-0 start-0 w-100 h-100"
       style={{
         zIndex: 9999,
         background: 'rgba(0,0,0,0.55)',
         backdropFilter: 'blur(6px)',
       }}
-      onMouseDown={(e) => {
-        // click outside -> close
+      onMouseDown={e => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
@@ -114,25 +132,19 @@ export default function VideoAnalyticsPanel({ videoId, onClose }: Props) {
         }}
       >
         {/* Header */}
-        <div
-          className="d-flex align-items-center justify-content-between px-4 py-3"
-          style={{
-            borderBottom: '1px solid var(--aurora-bento-border)',
-          }}
+        <div className="px-4 py-3 d-flex justify-content-between align-items-center"
+          style={{ borderBottom: '1px solid var(--aurora-bento-border)' }}
         >
           <div>
-            <div className="fw-light" style={{ fontSize: 16 }}>
-              Video Analytics
-            </div>
+            <div className="fw-light">Video Analytics</div>
             <div style={{ fontSize: 12, color: '#9aa0a6' }}>
-              Drill-down · guests vs members · trends
+              Trends · guests vs members
             </div>
           </div>
 
           <button
             className="btn btn-sm btn-outline-secondary"
             onClick={onClose}
-            aria-label="Close analytics modal"
           >
             Close ✕
           </button>
@@ -141,147 +153,112 @@ export default function VideoAnalyticsPanel({ videoId, onClose }: Props) {
         {/* Body */}
         <div className="p-4">
           {loading && (
-            <div
-              className="d-flex align-items-center justify-content-center"
-              style={{ height: 220, color: '#777' }}
-            >
-              Loading video analytics…
-            </div>
-          )}
-
-          {!loading && !data && (
-            <div
-              className="d-flex align-items-center justify-content-center"
-              style={{ height: 220, color: '#777' }}
-            >
-              No analytics found.
+            <div className="text-center text-muted py-5">
+              Loading analytics…
             </div>
           )}
 
           {!loading && data && (
             <>
-              {/* Top row: poster + quick stats */}
-              <div className="row g-3">
-                <div className="col-12 col-md-4">
-                  <div
-                    className="rounded"
+              {/* Poster + stats */}
+              <div className="row g-3 mb-4">
+                <div className="col-md-4">
+                  <img
+                    src={data.video.poster_url}
+                    alt={data.video.title}
                     style={{
-                      overflow: 'hidden',
+                      width: '100%',
+                      height: 220,
+                      objectFit: 'cover',
+                      borderRadius: 12,
                       border: '1px solid var(--aurora-bento-border)',
-                      background: 'rgba(255,255,255,0.02)',
                     }}
-                  >
-                    <img
-                      src={data.video.poster_url}
-                      alt={data.video.title}
-                      style={{
-                        width: '100%',
-                        height: 220,
-                        objectFit: 'cover',
-                        display: 'block',
-                      }}
-                    />
-                  </div>
-
-                  <div className="mt-3">
-                    <div className="fw-light" style={{ fontSize: 16 }}>
-                      {data.video.title}
-                    </div>
-                    {data.video.subtitle && (
-                      <div style={{ fontSize: 12, color: '#9aa0a6' }}>
-                        {data.video.subtitle}
-                      </div>
-                    )}
-                  </div>
+                  />
                 </div>
 
-                <div className="col-12 col-md-8">
+                <div className="col-md-8">
                   <div className="row g-3">
-                    <div className="col-12 col-sm-4">
-                      <div
-                        className="p-3 rounded"
-                        style={{
-                          border: '1px solid var(--aurora-bento-border)',
-                          background: 'rgba(255,255,255,0.02)',
-                        }}
-                      >
-                        <div style={{ fontSize: 12, color: '#9aa0a6' }}>
-                          Total Views
-                        </div>
-                        <div style={{ fontSize: 22 }} className="fw-semibold">
-                          {data.total_views}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="col-12 col-sm-4">
-                      <div
-                        className="p-3 rounded"
-                        style={{
-                          border: '1px solid var(--aurora-bento-border)',
-                          background: 'rgba(255,255,255,0.02)',
-                        }}
-                      >
-                        <div style={{ fontSize: 12, color: '#9aa0a6' }}>
-                          Guest Views
-                        </div>
-                        <div style={{ fontSize: 22 }} className="fw-semibold">
-                          {data.guest_views}
+                    {[
+                      ['Total Views', data.total_views],
+                      ['Guest Views', data.guest_views],
+                      ['Member Views', data.member_views],
+                    ].map(([label, value]) => (
+                      <div key={label} className="col-sm-4">
+                        <div
+                          className="p-3 rounded"
+                          style={{
+                            border: '1px solid var(--aurora-bento-border)',
+                            background: 'rgba(255,255,255,0.02)',
+                          }}
+                        >
+                          <div style={{ fontSize: 12, color: '#303031' }}>
+                            {label}
+                          </div>
+                          <div className="fw-semibold fs-4">{value}</div>
                         </div>
                       </div>
-                    </div>
-
-                    <div className="col-12 col-sm-4">
-                      <div
-                        className="p-3 rounded"
-                        style={{
-                          border: '1px solid var(--aurora-bento-border)',
-                          background: 'rgba(255,255,255,0.02)',
-                        }}
-                      >
-                        <div style={{ fontSize: 12, color: '#9aa0a6' }}>
-                          Member Views
-                        </div>
-                        <div style={{ fontSize: 22 }} className="fw-semibold">
-                          {data.member_views}
-                        </div>
-                      </div>
-                    </div>
+                    ))}
                   </div>
+                </div>
+              </div>
 
-                  {/* Placeholder for Step 3/4 */}
-                  <div
-                    className="mt-3 p-3 rounded"
-                    style={{
-                      border: '1px dashed var(--aurora-bento-border)',
-                      background: 'rgba(255,255,255,0.01)',
-                      color: '#8b8f97',
-                    }}
-                  >
-                    Next: mini daily chart + stacked bars inside this modal.
-                  </div>
+              {/* Mini daily chart */}
+              <div className="mb-4">
+                <div className="mb-2" style={{ fontSize: 13, color: '#757576' }}>
+                  Daily Views (Last {daily.length} days)
+                </div>
+
+                <div style={{ height: 180 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={daily}>
+                      <XAxis dataKey="date" hide />
+                      <YAxis hide />
+                      <Tooltip />
+                      <Line
+                        type="monotone"
+                        dataKey="views"
+                        stroke="#00e0ff"
+                        strokeWidth={2}
+                        dot={false}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              {/* Stacked guest vs member */}
+              <div>
+                <div className="mb-2" style={{ fontSize: 13, color: '#585959' }}>
+                  Guest vs Member Views
+                </div>
+
+                <div style={{ height: 160 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                      data={[
+                        {
+                          name: 'Views',
+                          guest: data.guest_views,
+                          member: data.member_views,
+                        },
+                      ]}
+                    >
+                      <XAxis dataKey="name" />
+                      <YAxis />
+                      <Tooltip />
+                      <Bar dataKey="guest" stackId="a" fill="#6876f7" />
+                      <Bar dataKey="member" stackId="a" fill="#ff9d00" />
+                    </BarChart>
+                  </ResponsiveContainer>
                 </div>
               </div>
             </>
           )}
         </div>
-
-        {/* Footer */}
-        <div
-          className="px-4 py-3 d-flex justify-content-end"
-          style={{
-            borderTop: '1px solid var(--aurora-bento-border)',
-          }}
-        >
-          <button className="btn btn-sm btn-outline-secondary" onClick={onClose}>
-            Close
-          </button>
-        </div>
       </div>
     </div>
   );
 }
-
 
 
 {/*

@@ -1,15 +1,15 @@
 # backend/videos/routes.py
 
-# backend/videos/routes.py
-
 from datetime import datetime
 from flask import Blueprint, jsonify, request, current_app
-from extensions import db
+from extensions import db, limiter
 from .models import Video, VideoView
 from sqlalchemy import func, cast, Date
 import jwt
 from time import time
 from flask import request
+
+
 # -------------------------------------
 # Simple in-memory view throttle
 # key = (ip, video_id)
@@ -455,6 +455,7 @@ def get_views_weekly(current_admin):
 
 @videos_bp.route("/admin/views/weekly/events", methods=["GET"])
 @admin_token_required
+@limiter.exempt
 def get_views_weekly_events(current_admin):
     """
     Weekly total views across the platform (true event data).
@@ -487,6 +488,7 @@ def get_views_weekly_events(current_admin):
 
 @videos_bp.route("/admin/video/<uuid:video_id>/analytics", methods=["GET"])
 @admin_token_required
+@limiter.exempt
 def get_video_analytics(current_admin, video_id):
     video = Video.query.get(video_id)
     if not video:
@@ -519,6 +521,7 @@ def get_video_analytics(current_admin, video_id):
 
 @videos_bp.route("/admin/video/<uuid:video_id>/views/daily", methods=["GET"])
 @admin_token_required
+@limiter.exempt
 def get_video_views_daily(current_admin, video_id):
     days = request.args.get("days", 30, type=int)
 
