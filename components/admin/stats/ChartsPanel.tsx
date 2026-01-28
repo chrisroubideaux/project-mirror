@@ -3,8 +3,9 @@
 'use client';
 
 import { useState } from 'react';
+
 import ViewsBarChart from './ViewsBarChart';
-import ViewsLineChart from './ViewsLineChart';
+import PlatformViewsLineChart from './PlatformViewsLineChart';
 import VideoAnalyticsPanel from './VideoAnalyticsPanel';
 
 type ChartTab = 'daily' | 'weekly';
@@ -62,7 +63,9 @@ export default function ChartsPanel() {
           CHART AREA
       ============================= */}
       <div style={{ height: 360 }}>
-        {activeTab === 'daily' && <ViewsLineChart />}
+        {activeTab === 'daily' && (
+          <PlatformViewsLineChart />
+        )}
 
         {activeTab === 'weekly' && (
           <ViewsBarChart onSelectVideo={setSelectedVideo} />
@@ -70,7 +73,7 @@ export default function ChartsPanel() {
       </div>
 
       {/* =============================
-          DRILL-DOWN PANEL
+          DRILL-DOWN (PER VIDEO)
       ============================= */}
       {selectedVideo && (
         <VideoAnalyticsPanel
@@ -81,7 +84,6 @@ export default function ChartsPanel() {
     </div>
   );
 }
-
 
 
 

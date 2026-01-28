@@ -5,6 +5,7 @@ from flask import Blueprint, jsonify, request, current_app
 from extensions import db, limiter
 from .models import Video, VideoView
 from sqlalchemy import func, cast, Date
+from sqlalchemy.sql import case
 import jwt
 from time import time
 from flask import request
@@ -544,6 +545,51 @@ def get_video_views_daily(current_admin, video_id):
         for r in results
     ]), 200
 
+    
+# =====================================================
+# ADMIN ANALYTICS — PER VIDEO VIEWS (DAILY, STACKED)
+# =====================================================
+
+@videos_bp.route("/admin/video/<uuid:video_id>/views/daily/stacked", methods=["GET"])
+@admin_token_required
+@limiter.exempt
+def get_video_views_daily_stacked(current_admin, video_id):
+    days = request.args.get("days", 30, type=int)
+
+    results = (
+        db.session.query(
+            cast(VideoView.created_at, Date).label("date"),
+            func.sum(
+                case(
+                    (VideoView.user_id.is_(None), 1),
+                    else_=0
+                )
+            ).label("guest"),
+            func.sum(
+                case(
+                    (VideoView.user_id.isnot(None), 1),
+                    else_=0
+                )
+            ).label("member"),
+        )
+        .filter(VideoView.video_id == video_id)
+        .group_by(cast(VideoView.created_at, Date))
+        .order_by(cast(VideoView.created_at, Date).desc())
+        .limit(days)
+        .all()
+    )
+
+    results = list(reversed(results))
+
+    return jsonify([
+        {
+            "date": r.date.isoformat(),
+            "guest": int(r.guest or 0),
+            "member": int(r.member or 0),
+        }
+        for r in results
+    ]), 200
+    
     
 """""""""""""""""
 

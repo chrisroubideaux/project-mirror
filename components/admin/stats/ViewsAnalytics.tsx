@@ -1,9 +1,10 @@
 // components/admin/stats/ViewsAnalytics.tsx
+
 'use client';
 
 import { useState } from 'react';
 import ViewsBarChart from './ViewsBarChart';
-import ViewsLineChart from './ViewsLineChart';
+import PlatformViewsLineChart from './PlatformViewsLineChart';
 
 type Tab = 'bar' | 'line';
 
@@ -44,9 +45,8 @@ export default function ViewsAnalytics() {
         </div>
       </div>
 
-      {/* Chart */}
       {tab === 'bar' && <ViewsBarChart />}
-      {tab === 'line' && <ViewsLineChart />}
+      {tab === 'line' && <PlatformViewsLineChart />}
     </div>
   );
 }
