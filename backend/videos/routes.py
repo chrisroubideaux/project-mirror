@@ -590,6 +590,37 @@ def get_video_views_daily_stacked(current_admin, video_id):
         for r in results
     ]), 200
     
+# =====================================================
+# ADMIN ANALYTICS — PER VIDEO VIEWS (WEEKLY)
+# =====================================================
+
+@videos_bp.route("/admin/video/<uuid:video_id>/views/weekly", methods=["GET"])
+@admin_token_required
+@limiter.exempt
+def get_video_views_weekly(current_admin, video_id):
+    weeks = request.args.get("weeks", 12, type=int)
+
+    results = (
+        db.session.query(
+            func.date_trunc("week", VideoView.created_at).label("week"),
+            func.count(VideoView.id).label("views"),
+        )
+        .filter(VideoView.video_id == video_id)
+        .group_by(func.date_trunc("week", VideoView.created_at))
+        .order_by(func.date_trunc("week", VideoView.created_at).desc())
+        .limit(weeks)
+        .all()
+    )
+
+    results = list(reversed(results))
+
+    return jsonify([
+        {
+            "week": r.week.date().isoformat(),
+            "views": int(r.views),
+        }
+        for r in results
+    ]), 200
     
 """""""""""""""""
 
