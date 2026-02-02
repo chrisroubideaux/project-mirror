@@ -1,6 +1,242 @@
 // backend/admin/alerts/AdminAlertsBell.tsx
 'use client';
 
+import { useEffect, useRef, useState } from 'react';
+import { FaBell } from 'react-icons/fa';
+
+const API_BASE =
+  process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000';
+
+const ADMIN_TOKEN_KEY = 'aurora_admin_token';
+const POLL_INTERVAL_MS = 15_000; // 🔴 15s feels "live" without spam
+
+/* =============================
+   Types
+============================= */
+
+type Severity = 'info' | 'warning' | 'danger';
+
+type AnalyticsAlert = {
+  id: string;
+  video_id: string | null;
+  alert_type: string;
+  severity: Severity;
+  title: string;
+  message: string;
+  payload?: {
+    ai_explanation?: string;
+    [key: string]: any;
+  };
+  created_at: string;
+};
+
+const severityColor: Record<Severity, string> = {
+  info: '#00e0ff',
+  warning: '#ffb020',
+  danger: '#ff6b6b',
+};
+
+/* =============================
+   Component
+============================= */
+
+export default function AdminAlertsBell() {
+  const [alerts, setAlerts] = useState<AnalyticsAlert[]>([]);
+  const [open, setOpen] = useState(false);
+
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const mountedRef = useRef(false);
+
+  const token =
+    typeof window !== 'undefined'
+      ? localStorage.getItem(ADMIN_TOKEN_KEY)
+      : null;
+
+  /* ---------------------------------------------
+     Fetch unread alerts
+  --------------------------------------------- */
+  const fetchAlerts = async () => {
+    if (!token) return;
+
+    try {
+      const res = await fetch(
+        `${API_BASE}/api/videos/admin/alerts?unread=1`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+
+      if (!res.ok) return;
+
+      const data: AnalyticsAlert[] = await res.json();
+
+      if (!mountedRef.current) return;
+
+      // 🔒 Prevent flicker / unnecessary state updates
+      setAlerts(prev =>
+        JSON.stringify(prev) === JSON.stringify(data) ? prev : data
+      );
+    } catch (err) {
+      console.error('Alert polling failed:', err);
+    }
+  };
+
+  /* ---------------------------------------------
+     Initial load + polling
+  --------------------------------------------- */
+  useEffect(() => {
+    if (!token) return;
+
+    mountedRef.current = true;
+
+    // initial fetch
+    fetchAlerts();
+
+    // start polling once
+    if (!intervalRef.current) {
+      intervalRef.current = setInterval(fetchAlerts, POLL_INTERVAL_MS);
+    }
+
+    return () => {
+      mountedRef.current = false;
+
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+    };
+  }, [token]);
+
+  /* ---------------------------------------------
+     Acknowledge alert
+  --------------------------------------------- */
+  const acknowledge = async (id: string) => {
+    if (!token) return;
+
+    try {
+      await fetch(
+        `${API_BASE}/api/videos/admin/alerts/${id}/ack`,
+        {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+
+      // optimistic UI
+      setAlerts(prev => prev.filter(a => a.id !== id));
+    } catch (err) {
+      console.error('Failed to acknowledge alert:', err);
+    }
+  };
+
+  /* ---------------------------------------------
+     Render
+  --------------------------------------------- */
+  return (
+    <div style={{ position: 'relative' }}>
+      {/* 🔔 Bell */}
+      <button
+        className="btn btn-sm btn-outline-secondary position-relative"
+        onClick={() => setOpen(o => !o)}
+        aria-label="Alerts"
+      >
+        <FaBell />
+
+        {alerts.length > 0 && (
+          <span
+            style={{
+              position: 'absolute',
+              top: -4,
+              right: -4,
+              background: '#ff4d4f',
+              color: '#fff',
+              borderRadius: '50%',
+              fontSize: 10,
+              width: 18,
+              height: 18,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            {alerts.length}
+          </span>
+        )}
+      </button>
+
+      {/* ▼ Dropdown */}
+      {open && (
+        <div
+          style={{
+            position: 'absolute',
+            right: 0,
+            top: '120%',
+            width: 340,
+            background: 'var(--card-bg)',
+            border: '1px solid var(--aurora-bento-border)',
+            borderRadius: 14,
+            boxShadow: '0 20px 50px rgba(0,0,0,0.35)',
+            zIndex: 2000,
+            padding: 10,
+          }}
+        >
+          {alerts.length === 0 ? (
+            <div className="small text-muted p-2">
+              No unread alerts
+            </div>
+          ) : (
+            alerts.map(alert => (
+              <div
+                key={alert.id}
+                style={{
+                  padding: 12,
+                  borderRadius: 10,
+                  marginBottom: 8,
+                  borderLeft: `4px solid ${severityColor[alert.severity]}`,
+                  background: 'rgba(255,255,255,0.03)',
+                }}
+              >
+                <div className="fw-semibold small">
+                  {alert.title}
+                </div>
+
+                <div className="small text-muted">
+                  {new Date(alert.created_at).toLocaleString()}
+                </div>
+
+                <div className="small mt-1">
+                  {alert.message}
+                </div>
+
+                {alert.payload?.ai_explanation && (
+                  <div
+                    className="small mt-1"
+                    style={{ fontStyle: 'italic', opacity: 0.8 }}
+                  >
+                    🤖 {alert.payload.ai_explanation}
+                  </div>
+                )}
+
+                <button
+                  onClick={() => acknowledge(alert.id)}
+                  className="btn btn-sm btn-link p-0 mt-2"
+                  style={{ fontSize: 12 }}
+                >
+                  Mark as read
+                </button>
+              </div>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+{/*
+'use client';
+
 import { useEffect, useState, useRef } from 'react';
 import { FaBell } from 'react-icons/fa';
 
@@ -40,9 +276,7 @@ export default function AdminAlertsBell() {
       ? localStorage.getItem(ADMIN_TOKEN_KEY)
       : null;
 
-  /* ---------------------------------------------
-     Fetch unread alerts
-  --------------------------------------------- */
+  
   const fetchAlerts = async () => {
     if (!token) return;
 
@@ -61,9 +295,7 @@ export default function AdminAlertsBell() {
     }
   };
 
-  /* ---------------------------------------------
-     Initial load + polling
-  --------------------------------------------- */
+ 
   useEffect(() => {
     fetchAlerts(); // initial
 
@@ -79,9 +311,7 @@ export default function AdminAlertsBell() {
     };
   }, [token]);
 
-  /* ---------------------------------------------
-     Acknowledge alert
-  --------------------------------------------- */
+
   const acknowledge = async (id: string) => {
     if (!token) return;
 
@@ -95,7 +325,7 @@ export default function AdminAlertsBell() {
 
   return (
     <div style={{ position: 'relative' }}>
-      {/* Bell */}
+      
       <button
         className="btn btn-sm btn-outline-secondary position-relative"
         onClick={() => setOpen(o => !o)}
@@ -125,7 +355,7 @@ export default function AdminAlertsBell() {
         )}
       </button>
 
-      {/* Dropdown */}
+     
       {open && (
         <div
           style={{
@@ -189,3 +419,5 @@ export default function AdminAlertsBell() {
     </div>
   );
 }
+
+*/}
