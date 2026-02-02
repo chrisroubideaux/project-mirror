@@ -9,6 +9,7 @@ from sqlalchemy.sql import case
 import jwt
 from time import time
 from flask import request
+from flask import Response
 from videos.services.analytics_alerts import create_analytics_alert
 from videos.services.anomaly_detection import detect_guest_surge
 from videos.services.ai_explanations import generate_alert_explanation
@@ -31,6 +32,11 @@ videos_bp = Blueprint(
     "videos",
     __name__,
     url_prefix="/api/videos"
+)
+
+from videos.services.csv_export import (
+    export_alerts_csv,
+    export_video_views_csv,
 )
 
 # =====================================================
@@ -723,11 +729,6 @@ def create_alert(current_admin):
     }), 200 if deduped else 201
 
 
-
-
-
-
-
 """""""""""""""""""""""""""""""""
 @videos_bp.route("/admin/alerts", methods=["POST"])
 @admin_token_required
@@ -788,6 +789,22 @@ def ack_alert(current_admin, alert_id):
 
     return jsonify({"ok": True, "alert": alert.to_dict()}), 200
 
+# ====================================
+# Csv export alerts
+# ====================================
+
+@videos_bp.route("/admin/alerts/export", methods=["GET"])
+@admin_token_required
+def export_alerts(current_admin):
+    csv_data = export_alerts_csv(current_admin.id)
+
+    return Response(
+        csv_data,
+        mimetype="text/csv",
+        headers={
+            "Content-Disposition": "attachment; filename=alerts.csv"
+        },
+    )
 
 
 """""""""""""""""

@@ -1,5 +1,4 @@
 // components/admin/stats/ViewsStackedAreaChart.tsx
-
 'use client';
 
 import {
@@ -28,7 +27,6 @@ type Point = {
   guest: number;
   member: number;
   guestAvg?: number;
-  memberAvg?: number;
   guestSpike?: boolean;
 };
 
@@ -52,7 +50,7 @@ type Props = {
 const ROLLING_WINDOW = 7;
 const GUEST_SPIKE_RATIO = 1.8;
 
-const severityColor = {
+const severityColor: Record<AnalyticsAlert['severity'], string> = {
   info: 'var(--accent)',
   warning: '#ffb020',
   danger: '#ff4d4f',
@@ -77,7 +75,7 @@ export default function ViewsStackedAreaChart({ videoId }: Props) {
   }, []);
 
   /* ---------------------------------------------
-     Fetch chart data
+     Fetch stacked view data
   --------------------------------------------- */
   useEffect(() => {
     if (!token || !videoId) return;
@@ -119,7 +117,7 @@ export default function ViewsStackedAreaChart({ videoId }: Props) {
   }, [videoId, range, mode, token]);
 
   /* ---------------------------------------------
-     Fetch alerts
+     Fetch alerts (for anomaly markers)
   --------------------------------------------- */
   useEffect(() => {
     if (!token) return;
@@ -133,7 +131,7 @@ export default function ViewsStackedAreaChart({ videoId }: Props) {
   }, [token]);
 
   /* ---------------------------------------------
-     Index alerts by date
+     Index alerts by date (YYYY-MM-DD)
   --------------------------------------------- */
   const alertsByDate = useMemo(() => {
     const map: Record<string, AnalyticsAlert[]> = {};
@@ -147,7 +145,10 @@ export default function ViewsStackedAreaChart({ videoId }: Props) {
 
   if (loading) {
     return (
-      <div className=" small" style={{ height: 220 }}>
+      <div
+        className="small text-muted d-flex align-items-center justify-content-center"
+        style={{ height: 220 }}
+      >
         Loading stacked views…
       </div>
     );
@@ -172,7 +173,11 @@ export default function ViewsStackedAreaChart({ videoId }: Props) {
               className="btn btn-sm"
               style={{
                 border: '1px solid var(--aurora-modal-border)',
-                color: range === r ? 'var(--accent)' : 'var(--foreground-muted)',
+                color:
+                  range === r
+                    ? 'var(--accent)'
+                    : 'var(--foreground-muted)',
+                background: 'transparent',
               }}
             >
               {r === 'all' ? 'All' : `${r}d`}
@@ -201,7 +206,10 @@ export default function ViewsStackedAreaChart({ videoId }: Props) {
       <div style={{ height: 240 }}>
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={data}>
-            <CartesianGrid stroke="rgba(255,255,255,0.06)" vertical={false} />
+            <CartesianGrid
+              stroke="rgba(255,255,255,0.06)"
+              vertical={false}
+            />
             <XAxis dataKey="date" tick={{ fontSize: 11 }} />
             <YAxis hide />
             <Tooltip />
@@ -228,7 +236,7 @@ export default function ViewsStackedAreaChart({ videoId }: Props) {
               />
             )}
 
-            {/* 🔴 Anomaly markers */}
+            {/* 🔴 Anomaly → Alert navigation */}
             <Scatter
               data={data.filter(d => alertsByDate[d.date])}
               shape={({ cx, cy, payload }) => {
