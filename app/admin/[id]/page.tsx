@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 
 import AdminSidebar from '@/components/admin/sidebar/AdminSidebar';
+import AlertsTab from '@/components/admin/alerts/AlertsTab';
 import UploadTab from '@/components/admin/uploads/UploadTab';
 import VideosTab from '@/components/admin/videos/VideosTab';
 import StatCards from '@/components/admin/stats/StatCards';
@@ -33,6 +34,7 @@ type AdminProfile = {
 
 export type AdminSidebarTab =
   | 'dashboard'
+  | 'alerts'
   | 'upload'
   | 'videos'
   | 'charts';
@@ -172,6 +174,13 @@ export default function AdminPage() {
                 {activeTab === 'charts' && (
                   <ChartsPanel />
                 )}
+                {/* =============================
+                    ALERTS
+                ============================= */}
+                {activeTab === 'alerts' && (
+                  <AlertsTab />
+                )}
+
               </motion.div>
             </AnimatePresence>
           </div>

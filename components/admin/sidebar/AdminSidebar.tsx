@@ -5,6 +5,7 @@ import React, { useState } from 'react';
 import {
   FaBars,
   FaTachometerAlt,
+  FaBell,
   FaUpload,
   FaVideo,
   FaChartBar,
@@ -21,6 +22,7 @@ import ThemeToggleButton from '@/components/ThemeToggleButton';
 
 export type AdminSidebarTab =
   | 'dashboard'
+  | 'alerts'
   | 'upload'
   | 'videos'
   | 'charts';
@@ -57,6 +59,12 @@ export default function AdminSidebar({
       label: 'Dashboard',
       icon: <FaTachometerAlt />,
       aria: 'Admin Dashboard',
+    },
+    {
+      tab: 'alerts',
+      label: 'Alerts',
+      icon: <FaBell />,
+      aria: 'Analytics Alerts',
     },
     {
       tab: 'upload',
@@ -178,7 +186,6 @@ export default function AdminSidebar({
             <div className="text-center w-100">🛡️</div>
           )}
 
-          {/* Theme Toggle */}
           {!collapsed && (
             <ThemeToggleButton placement="inline" />
           )}
@@ -188,7 +195,10 @@ export default function AdminSidebar({
   );
 }
 
+
+
 {/*
+
 'use client';
 
 import React, { useState } from 'react';
@@ -197,17 +207,21 @@ import {
   FaTachometerAlt,
   FaUpload,
   FaVideo,
+  FaChartBar,
   FaSignOutAlt,
   FaUserShield,
 } from 'react-icons/fa';
 import { motion } from 'framer-motion';
 
+import ThemeToggleButton from '@/components/ThemeToggleButton';
+import AdminAlertsBell from '@/components/admin/alerts/AdminAlertsBell';
 
 
 export type AdminSidebarTab =
   | 'dashboard'
   | 'upload'
-  | 'videos';
+  | 'videos'
+  | 'charts';
 
 type AdminSidebarProps = {
   adminId: string;
@@ -252,6 +266,12 @@ export default function AdminSidebar({
       icon: <FaVideo />,
       aria: 'Manage Videos',
     },
+    {
+      tab: 'charts',
+      label: 'Charts',
+      icon: <FaChartBar />,
+      aria: 'Analytics Charts',
+    },
   ];
 
   return (
@@ -270,21 +290,25 @@ export default function AdminSidebar({
       }}
       data-admin-id={adminId}
     >
+      
       <div>
         <div className="d-flex align-items-center justify-content-between p-3 border-bottom">
           <h6 className="mb-0 fw-light">
-            {collapsed
-              ? <FaUserShield />
-              : `Admin · ${adminName.split(' ')[0]}`}
+            {collapsed ? <FaUserShield /> : `Admin · ${adminName.split(' ')[0]}`}
           </h6>
 
-          <button
-            onClick={() => setCollapsed(!collapsed)}
-            className="btn btn-sm btn-outline-secondary"
-            aria-label="Toggle sidebar"
-          >
-            <FaBars />
-          </button>
+
+          <div className="d-flex align-items-center gap-2">
+            <AdminAlertsBell />
+
+            <button
+              onClick={() => setCollapsed(!collapsed)}
+              className="btn btn-sm btn-outline-secondary"
+              aria-label="Toggle sidebar"
+            >
+              <FaBars />
+            </button>
+          </div>
         </div>
 
         <ul className="nav flex-column mt-3">
@@ -331,19 +355,30 @@ export default function AdminSidebar({
         </ul>
       </div>
 
-      <div className="p-3 border-top small" style={{ opacity: 0.6 }}>
-        {!collapsed ? (
-          <>
-            <div>🛡️ Project Aurora</div>
-            <div style={{ fontSize: '0.75rem' }}>
-              Admin Console · {new Date().getFullYear()}
+      <div className="p-3 border-top small" style={{ opacity: 0.8 }}>
+        <div className="d-flex align-items-center justify-content-between">
+          {!collapsed ? (
+            <div>
+              <div>🛡️ Project Aurora</div>
+              <div style={{ fontSize: '0.75rem' }}>
+                Admin Console · {new Date().getFullYear()}
+              </div>
             </div>
-          </>
-        ) : (
-          <div className="text-center">🛡️</div>
-        )}
+          ) : (
+            <div className="text-center w-100">🛡️</div>
+          )}
+
+         
+          {!collapsed && (
+            <ThemeToggleButton placement="inline" />
+          )}
+        </div>
       </div>
     </motion.div>
   );
 }
+
+
+
+
 */}
