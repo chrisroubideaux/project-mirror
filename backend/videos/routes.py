@@ -1,18 +1,22 @@
 # backend/videos/routes.py
 
 from datetime import datetime
-from flask import Blueprint, jsonify, request, current_app
-from extensions import db, limiter
-from .models import Video, VideoView, AnalyticsAlert
+from time import time
+
+from flask import Blueprint, jsonify, request, current_app, Response
 from sqlalchemy import func, cast, Date
 from sqlalchemy.sql import case
 import jwt
-from time import time
-from flask import request
-from flask import Response
+
+from extensions import db, limiter
+from .models import Video, VideoView, AnalyticsAlert
+
 from videos.services.analytics_alerts import create_analytics_alert
 from videos.services.anomaly_detection import detect_guest_surge
 from videos.services.ai_explanations import generate_alert_explanation
+from videos.services.csv_export import export_alerts_csv
+
+
 
 
 # -------------------------------------
@@ -805,6 +809,7 @@ def export_alerts(current_admin):
             "Content-Disposition": "attachment; filename=alerts.csv"
         },
     )
+
 
 
 """""""""""""""""
