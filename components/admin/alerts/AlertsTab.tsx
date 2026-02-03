@@ -121,13 +121,10 @@ export default function AlertsTab() {
     if (!token) return;
 
     try {
-      await fetch(
-        `${API_BASE}/api/videos/admin/alerts/${id}/ack`,
-        {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
+      await fetch(`${API_BASE}/api/videos/admin/alerts/${id}/ack`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
 
       setAlerts(prev =>
         prev.map(a =>
@@ -154,13 +151,14 @@ export default function AlertsTab() {
   return (
     <div className="d-flex flex-column gap-4">
       {/* =================================
-          Header + Filter
+          Header + Controls
       ================================= */}
       <div className="d-flex align-items-center justify-content-between">
         <h4 className="fw-light mb-0">Alerts</h4>
 
-        <div className="d-flex align-items-center gap-2">
+        <div className="d-flex align-items-center gap-2 flex-wrap">
           <FaFilter />
+
           <select
             className="form-select form-select-sm"
             value={severity}
@@ -176,6 +174,23 @@ export default function AlertsTab() {
             <option value="warning">Warning</option>
             <option value="danger">Critical</option>
           </select>
+
+          {/* 📤 Export CSV */}
+          <button
+  className="btn btn-sm btn-outline-secondary"
+  onClick={() => {
+    const token = localStorage.getItem(ADMIN_TOKEN_KEY);
+    if (!token) return;
+
+    window.open(
+      `${API_BASE}/api/videos/admin/alerts/export?token=${token}`,
+      '_blank'
+    );
+  }}
+>
+  Export CSV
+</button>
+
         </div>
       </div>
 
