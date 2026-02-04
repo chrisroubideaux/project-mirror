@@ -1,5 +1,5 @@
 # backend/users/models.py
-# backend/users/models.py
+
 import uuid
 from datetime import datetime
 from sqlalchemy.dialects.postgresql import UUID, JSONB
@@ -164,6 +164,8 @@ class EmotionalProfile(db.Model):
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     user = db.relationship("User", back_populates="emotional_profile")
+
+
 
 """"""""""""""""""""""
 import uuid
