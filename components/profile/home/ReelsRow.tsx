@@ -1,5 +1,4 @@
 // components/profile/home/ReelsRow.tsx
-
 'use client';
 
 export default function ReelsRow() {
@@ -20,6 +19,7 @@ export default function ReelsRow() {
               borderRadius: 14,
               background: '#222',
               scrollSnapAlign: 'start',
+              cursor: 'pointer',
             }}
           />
         ))}
@@ -27,3 +27,4 @@ export default function ReelsRow() {
     </div>
   );
 }
+

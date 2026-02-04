@@ -1,5 +1,7 @@
 // components/videos/VideoPlayer.tsx
 
+// components/videos/VideoPlayer.tsx
+
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -76,7 +78,7 @@ export default function VideoPlayer({
           overflowY: 'auto',
         }}
       >
-        {/* CONTENT WRAPPER */}
+       
         <motion.div
           initial={{ y: 24, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
@@ -89,7 +91,7 @@ export default function VideoPlayer({
             transition: 'max-width 0.3s ease, margin 0.3s ease',
           }}
         >
-          {/* PLAYER FRAME */}
+         
           <div
             style={{
               position: 'relative',
@@ -103,7 +105,6 @@ export default function VideoPlayer({
                 'border-radius 0.3s ease, max-height 0.3s ease',
             }}
           >
-            {/* 🎥 THEATER MODE TOGGLE */}
             <button
               onClick={() => setTheater((v) => !v)}
               aria-label="Toggle theater mode"
@@ -124,7 +125,6 @@ export default function VideoPlayer({
               {theater ? '▢' : '▣'}
             </button>
 
-            {/* VIDEO */}
             <video
               ref={videoRef}
               src={src}
@@ -140,7 +140,6 @@ export default function VideoPlayer({
             />
           </div>
 
-          {/* META */}
           <div
             style={{
               marginTop: 18,
@@ -175,14 +174,15 @@ export default function VideoPlayer({
   );
 }
 
-{/*
 
+{/*
 // components/videos/VideoPlayer.tsx
 
 'use client';
 
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useMiniPlayer } from '@/components/videos/MiniPlayerContext';
 
 export type PlaybackVideo = {
   id: string;
@@ -201,8 +201,11 @@ export default function VideoPlayer({
 }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const src = useMemo(() => video.video_url, [video.video_url]);
+  const { setVideo: setMiniPlayerVideo } = useMiniPlayer();
 
-  // Lock scroll
+  const [theater, setTheater] = useState(false);
+
+  // 🔒 Lock background scroll
   useEffect(() => {
     const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
@@ -211,16 +214,19 @@ export default function VideoPlayer({
     };
   }, []);
 
-  // ESC to close
+  // ⌨️ ESC to close → send to mini-player
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') {
+        setMiniPlayerVideo(video);
+        onClose();
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  }, [onClose, setMiniPlayerVideo, video]);
 
-  // Reset playback on src change
+  // 🔁 Reset playback when src changes
   useEffect(() => {
     const v = videoRef.current;
     if (!v) return;
@@ -228,13 +234,18 @@ export default function VideoPlayer({
     v.currentTime = 0;
   }, [src]);
 
+  const handleClose = () => {
+    setMiniPlayerVideo(video);
+    onClose();
+  };
+
   return (
     <AnimatePresence>
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        onClick={onClose}
+        onClick={handleClose}
         style={{
           position: 'fixed',
           inset: 0,
@@ -250,9 +261,10 @@ export default function VideoPlayer({
           exit={{ y: 24, opacity: 0 }}
           onClick={(e) => e.stopPropagation()}
           style={{
-            maxWidth: 1440,
-            margin: '4vh auto 64px',
+            maxWidth: theater ? '96vw' : 1440,
+            margin: theater ? '2vh auto 64px' : '4vh auto 64px',
             padding: '0 16px',
+            transition: 'max-width 0.3s ease, margin 0.3s ease',
           }}
         >
          
@@ -260,13 +272,35 @@ export default function VideoPlayer({
             style={{
               position: 'relative',
               width: '100%',
-              maxHeight: '80vh',           // 🔑 viewport-aware
               aspectRatio: '16 / 9',
+              maxHeight: theater ? '85vh' : '80vh',
               background: '#000',
-              borderRadius: 16,
+              borderRadius: theater ? 8 : 16,
               overflow: 'hidden',
+              transition:
+                'border-radius 0.3s ease, max-height 0.3s ease',
             }}
           >
+            <button
+              onClick={() => setTheater((v) => !v)}
+              aria-label="Toggle theater mode"
+              style={{
+                position: 'absolute',
+                top: 12,
+                right: 12,
+                zIndex: 5,
+                background: 'rgba(0,0,0,0.65)',
+                color: '#fff',
+                border: 'none',
+                borderRadius: 6,
+                padding: '6px 8px',
+                cursor: 'pointer',
+                fontSize: 14,
+              }}
+            >
+              {theater ? '▢' : '▣'}
+            </button>
+
             <video
               ref={videoRef}
               src={src}
@@ -276,13 +310,12 @@ export default function VideoPlayer({
               style={{
                 width: '100%',
                 height: '100%',
-                objectFit: 'contain',       // 🔑 prevents cropping
+                objectFit: 'contain',
                 display: 'block',
               }}
             />
           </div>
 
-        
           <div
             style={{
               marginTop: 18,
@@ -318,4 +351,5 @@ export default function VideoPlayer({
 }
 
 
-   */}
+
+*/}
