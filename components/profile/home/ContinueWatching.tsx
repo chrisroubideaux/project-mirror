@@ -1,35 +1,105 @@
 // components/profile/home/ContinueWatching.tsx
-// components/profile/home/ContinueWatching.tsx
 'use client';
 
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import type { PublicVideo } from '@/components/videos/VideoCard';
+
+const API_BASE =
+  process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:5000';
+
+type ContinueVideo = PublicVideo & {
+  progress: number; // 0 → 1 (mocked for now)
+};
+
 export default function ContinueWatching() {
+  const router = useRouter();
+
+  const [video, setVideo] = useState<ContinueVideo | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const token =
+          localStorage.getItem('aurora_user_token');
+
+        if (!token) return;
+
+        const res = await fetch(
+          `${API_BASE}/api/videos/member`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+
+        if (!res.ok) return;
+
+        const videos = (await res.json()) as PublicVideo[];
+
+        // 🚧 TEMP heuristic:
+        // pick the first video as "continue watching"
+        // (replace later with real progress API)
+        const first = videos[0];
+        if (!first) return;
+
+        setVideo({
+          ...first,
+          progress: 0.42, // placeholder until progress table exists
+        });
+      } catch (err) {
+        console.error(
+          'Failed to load Continue Watching',
+          err
+        );
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
+  if (loading || !video) {
+    return null;
+  }
+
+  const handleResume = () => {
+    router.push(`/videos/${video.id}`);
+  };
+
   return (
     <div
       className="p-4 rounded-4"
       style={{
         background: 'var(--aurora-bento-bg)',
         border: '1px solid var(--aurora-bento-border)',
+        cursor: 'pointer',
       }}
+      onClick={handleResume}
     >
       <h5 className="fw-light mb-3">Continue Watching</h5>
 
-      <div
-        className="d-flex gap-3 align-items-center"
-        style={{ cursor: 'pointer' }}
-      >
-        <div
+      <div className="d-flex gap-3 align-items-center">
+        {/* POSTER */}
+        <img
+          src={video.poster_url}
+          alt={video.title}
           style={{
             width: 220,
             height: 120,
             borderRadius: 12,
-            background: '#222',
+            objectFit: 'cover',
           }}
         />
 
         <div className="flex-grow-1">
-          <div className="fw-semibold">Projekt Aurora – Trailer</div>
+          <div className="fw-semibold">
+            {video.title}
+          </div>
+
           <div className="small text-muted mb-2">
-            42% watched
+            {Math.round(video.progress * 100)}% watched
           </div>
 
           <div
@@ -43,7 +113,7 @@ export default function ContinueWatching() {
           >
             <div
               style={{
-                width: '42%',
+                width: `${video.progress * 100}%`,
                 height: '100%',
                 background: 'var(--accent)',
               }}

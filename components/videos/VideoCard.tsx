@@ -2,7 +2,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useRef, useState, useEffect } from 'react';
+import { useRef, useState } from 'react';
 
 export type PublicVideo = {
   id: string;
@@ -16,42 +16,53 @@ export type PublicVideo = {
   type: string;
   visibility: string;
   created_at: string;
-
-  // NEW
   series_avatar_url?: string | null;
-
-  // OPTIONAL COSMETIC FIELDS
   view_count?: number;
-  progress?: number; // 0 → 1
+  progress?: number;
 };
 
 export default function VideoCard({ video }: { video: PublicVideo }) {
   const router = useRouter();
   const videoRef = useRef<HTMLVideoElement | null>(null);
+
   const [hovered, setHovered] = useState(false);
 
-useEffect(() => {
-  fetch(
-    `http://localhost:5000/api/videos/${video.id}/view`,
-    { method: 'POST' }
-  ).catch(() => {});
-}, [video.id]);
+  // 🔒 Prevent double view fires
+  const hasRegisteredViewRef = useRef(false);
 
+  const registerView = () => {
+    if (hasRegisteredViewRef.current) return;
+    hasRegisteredViewRef.current = true;
+
+    fetch(
+      `${process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:5000'}/api/videos/${video.id}/view`,
+      { method: 'POST' }
+    ).catch(() => {});
+  };
 
   const handleMouseEnter = () => {
     setHovered(true);
-    if (videoRef.current) {
-      videoRef.current.currentTime = 0;
-      videoRef.current.play().catch(() => {});
-    }
+
+    const v = videoRef.current;
+    if (!v) return;
+
+    v.currentTime = 0;
+    v.play()
+      .then(() => {
+        // 🎯 Meaningful playback starts here
+        registerView();
+      })
+      .catch(() => {});
   };
 
   const handleMouseLeave = () => {
     setHovered(false);
-    if (videoRef.current) {
-      videoRef.current.pause();
-      videoRef.current.currentTime = 0;
-    }
+
+    const v = videoRef.current;
+    if (!v) return;
+
+    v.pause();
+    v.currentTime = 0;
   };
 
   const uploadDate = new Date(video.created_at);
@@ -231,15 +242,8 @@ useEffect(() => {
         )}
       </div>
 
-      {/* META ROW */}
-      <div
-        style={{
-          display: 'flex',
-          gap: 10,
-          paddingTop: 12,
-        }}
-      >
-        {/* SERIES / CHANNEL AVATAR */}
+      {/* META */}
+      <div style={{ display: 'flex', gap: 10, paddingTop: 12 }}>
         {video.series_avatar_url ? (
           <img
             src={video.series_avatar_url}
@@ -249,7 +253,6 @@ useEffect(() => {
               height: 36,
               borderRadius: '50%',
               objectFit: 'cover',
-              flexShrink: 0,
             }}
           />
         ) : (
@@ -265,44 +268,21 @@ useEffect(() => {
               fontSize: 14,
               fontWeight: 600,
               color: '#fff',
-              flexShrink: 0,
             }}
           >
             {video.title.charAt(0)}
           </div>
         )}
 
-        {/* TEXT */}
         <div style={{ flex: 1 }}>
-          <div
-            style={{
-              fontWeight: 600,
-              fontSize: 14,
-              lineHeight: 1.35,
-              marginBottom: 4,
-            }}
-          >
+          <div style={{ fontWeight: 600, fontSize: 14 }}>
             {video.title}
           </div>
-
-          <div
-            style={{
-              fontSize: 12,
-              opacity: 0.65,
-            }}
-          >
+          <div style={{ fontSize: 12, opacity: 0.65 }}>
             {video.subtitle ?? video.type}
           </div>
-
-          <div
-            style={{
-              fontSize: 11,
-              opacity: 0.5,
-              marginTop: 2,
-            }}
-          >
-            {(video.view_count ?? 0).toLocaleString()} views •{' '}
-            {timeAgo}
+          <div style={{ fontSize: 11, opacity: 0.5 }}>
+            {(video.view_count ?? 0).toLocaleString()} views • {timeAgo}
           </div>
         </div>
       </div>
@@ -316,7 +296,7 @@ useEffect(() => {
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useRef, useState } from 'react';
+import { useRef, useState, useEffect } from 'react';
 
 export type PublicVideo = {
   id: string;
@@ -331,15 +311,26 @@ export type PublicVideo = {
   visibility: string;
   created_at: string;
 
-  // OPTIONAL COSMETIC FIELDS (safe defaults)
+  // NEW
+  series_avatar_url?: string | null;
+
+  // OPTIONAL COSMETIC FIELDS
   view_count?: number;
-  progress?: number; // 0 → 1 (continue watching)
+  progress?: number; // 0 → 1
 };
 
 export default function VideoCard({ video }: { video: PublicVideo }) {
   const router = useRouter();
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [hovered, setHovered] = useState(false);
+
+useEffect(() => {
+  fetch(
+    `http://localhost:5000/api/videos/${video.id}/view`,
+    { method: 'POST' }
+  ).catch(() => {});
+}, [video.id]);
+
 
   const handleMouseEnter = () => {
     setHovered(true);
@@ -393,6 +384,7 @@ export default function VideoCard({ video }: { video: PublicVideo }) {
         background: 'transparent',
       }}
     >
+     
       <div
         style={{
           position: 'relative',
@@ -433,6 +425,7 @@ export default function VideoCard({ video }: { video: PublicVideo }) {
           />
         )}
 
+       
         <div
           style={{
             position: 'absolute',
@@ -443,6 +436,7 @@ export default function VideoCard({ video }: { video: PublicVideo }) {
           }}
         />
 
+       
         {!hovered && (
           <div
             style={{
@@ -488,48 +482,6 @@ export default function VideoCard({ video }: { video: PublicVideo }) {
           {video.type}
         </div>
 
-        {hovered && (
-          <div
-            style={{
-              position: 'absolute',
-              top: 8,
-              right: 8,
-              display: 'flex',
-              gap: 8,
-            }}
-          >
-            <button
-              style={{
-                width: 32,
-                height: 32,
-                borderRadius: '50%',
-                background: 'rgba(0,0,0,0.65)',
-                border: 'none',
-                color: '#fff',
-                cursor: 'pointer',
-              }}
-              aria-label="Save"
-            >
-              ＋
-            </button>
-
-            <button
-              style={{
-                width: 32,
-                height: 32,
-                borderRadius: '50%',
-                background: 'rgba(0,0,0,0.65)',
-                border: 'none',
-                color: '#fff',
-                cursor: 'pointer',
-              }}
-              aria-label="More"
-            >
-              ⋯
-            </button>
-          </div>
-        )}
-
         <div
           style={{
             position: 'absolute',
@@ -545,6 +497,7 @@ export default function VideoCard({ video }: { video: PublicVideo }) {
           {video.duration ?? '—'}
         </div>
 
+       
         {typeof video.progress === 'number' && (
           <div
             style={{
@@ -570,6 +523,7 @@ export default function VideoCard({ video }: { video: PublicVideo }) {
         )}
       </div>
 
+      
       <div
         style={{
           display: 'flex',
@@ -577,25 +531,40 @@ export default function VideoCard({ video }: { video: PublicVideo }) {
           paddingTop: 12,
         }}
       >
-     
-        <div
-          style={{
-            width: 36,
-            height: 36,
-            borderRadius: '50%',
-            background: '#222',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: 14,
-            fontWeight: 600,
-            color: '#fff',
-            flexShrink: 0,
-          }}
-        >
-          {video.title.charAt(0)}
-        </div>
+      
+        {video.series_avatar_url ? (
+          <img
+            src={video.series_avatar_url}
+            alt="Series avatar"
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: '50%',
+              objectFit: 'cover',
+              flexShrink: 0,
+            }}
+          />
+        ) : (
+          <div
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: '50%',
+              background: '#222',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: 14,
+              fontWeight: 600,
+              color: '#fff',
+              flexShrink: 0,
+            }}
+          >
+            {video.title.charAt(0)}
+          </div>
+        )}
 
+       
         <div style={{ flex: 1 }}>
           <div
             style={{
@@ -617,7 +586,6 @@ export default function VideoCard({ video }: { video: PublicVideo }) {
             {video.subtitle ?? video.type}
           </div>
 
-         
           <div
             style={{
               fontSize: 11,

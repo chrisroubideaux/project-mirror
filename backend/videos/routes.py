@@ -16,9 +16,6 @@ from videos.services.anomaly_detection import detect_guest_surge
 from videos.services.ai_explanations import generate_alert_explanation
 from videos.services.csv_export import export_alerts_csv
 
-
-
-
 # -------------------------------------
 # Simple in-memory view throttle
 # key = (ip, video_id)

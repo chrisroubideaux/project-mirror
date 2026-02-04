@@ -10,6 +10,7 @@ import AuroraSidebar, {
 } from '@/components/profile/sidebar/AuroraSidebar';
 
 import HomeFeed from '@/components/profile/home/HomeFeed';
+import ReelsFeed from '@/components/profile/reels/ReelsFeed';
 
 const TOKEN_KEY = 'aurora_user_token';
 
@@ -29,6 +30,7 @@ export default function AuroraProfilePage() {
   const [user, setUser] = useState<PageUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
   const [activeTab, setActiveTab] =
     useState<AuroraSidebarTab>('home');
 
@@ -161,7 +163,11 @@ export default function AuroraProfilePage() {
               <HomeFeed userId={user.id} />
             )}
 
-            {activeTab !== 'home' && (
+            {activeTab === 'reels' && (
+              <ReelsFeed userId={user.id} />
+            )}
+
+            {activeTab !== 'home' && activeTab !== 'reels' && (
               <div
                 style={{
                   height: '100%',
