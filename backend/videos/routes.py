@@ -6,10 +6,11 @@ from time import time
 from flask import Blueprint, jsonify, request, current_app, Response
 from sqlalchemy import func, cast, Date
 from sqlalchemy.sql import case
+from sqlalchemy.exc import IntegrityError
 import jwt
 
 from extensions import db, limiter
-from .models import Video, VideoView, AnalyticsAlert
+from .models import Video, VideoView, VideoReaction, VideoShare, AnalyticsAlert
 
 from videos.services.analytics_alerts import create_analytics_alert
 from videos.services.anomaly_detection import detect_guest_surge
@@ -806,6 +807,412 @@ def export_alerts(current_admin):
             "Content-Disposition": "attachment; filename=alerts.csv"
         },
     )
+    
+# ====================================
+# Create Reel
+# ====================================
+
+@videos_bp.route("/admin/reels", methods=["POST"])
+@admin_token_required
+def create_reel(current_admin):
+    data = request.get_json() or {}
+
+    required = ["title", "poster_url", "video_url"]
+    for field in required:
+        if not data.get(field):
+            return jsonify({"error": f"Missing field: {field}"}), 400
+
+    reel = Video(
+        title=data["title"],
+        subtitle=data.get("subtitle"),
+        description=data.get("description"),
+        poster_url=data["poster_url"],
+        video_url=data["video_url"],
+        duration=data.get("duration"),
+        aspect_ratio=data.get("aspect_ratio", "9:16"),
+        visibility=data.get("visibility", "public"),
+        is_reel=True,                      # 🔒 FORCE REEL
+        created_by=current_admin.id,
+    )
+
+    db.session.add(reel)
+    db.session.commit()
+
+    return jsonify(reel.to_dict(admin_view=True)), 201
+
+# ====================================
+# Get all Reels
+# ===================================
+
+@videos_bp.route("/admin/reels", methods=["GET"])
+@admin_token_required
+def get_all_reels_admin(current_admin):
+    reels = (
+        Video.query
+        .filter(Video.is_reel.is_(True))
+        .order_by(Video.created_at.desc())
+        .all()
+    )
+
+    return jsonify([r.to_dict(admin_view=True) for r in reels]), 200
+
+# ===================================
+# Get Reel by ID
+# =================================
+
+@videos_bp.route("/admin/reels/<uuid:video_id>", methods=["GET"])
+@admin_token_required
+def get_reel_admin(current_admin, video_id):
+    reel = Video.query.get(video_id)
+
+    if not reel or not reel.is_reel:
+        return jsonify({"error": "Reel not found"}), 404
+
+    return jsonify(reel.to_dict(admin_view=True)), 200
+
+# ====================================
+# Admin Update Reel
+# ===================================
+
+@videos_bp.route("/admin/reels/<uuid:video_id>", methods=["PUT"])
+@admin_token_required
+def update_reel(current_admin, video_id):
+    reel = Video.query.get(video_id)
+
+    if not reel or not reel.is_reel:
+        return jsonify({"error": "Reel not found"}), 404
+
+    data = request.get_json() or {}
+
+    editable_fields = [
+        "title",
+        "subtitle",
+        "description",
+        "poster_url",
+        "video_url",
+        "duration",
+        "aspect_ratio",
+        "visibility",
+        "is_active",
+    ]
+
+    for field in editable_fields:
+        if field in data:
+            setattr(reel, field, data[field])
+
+    reel.updated_at = datetime.utcnow()
+    db.session.commit()
+
+    return jsonify(reel.to_dict(admin_view=True)), 200
+
+
+# ===================================
+# Delete Reel (soft delete)
+# ==================================
+
+@videos_bp.route("/admin/reels/<uuid:video_id>", methods=["DELETE"])
+@admin_token_required
+def delete_reel(current_admin, video_id):
+    reel = Video.query.get(video_id)
+
+    if not reel or not reel.is_reel:
+        return jsonify({"error": "Reel not found"}), 404
+
+    reel.is_active = False
+    reel.deleted_at = datetime.utcnow()
+    reel.updated_at = datetime.utcnow()
+
+    db.session.commit()
+
+    return jsonify({"message": "Reel soft-deleted"}), 200
+
+
+# ====================================
+# Reactions to videos
+# ===================================
+
+@videos_bp.route("/<uuid:video_id>/react", methods=["POST"])
+@token_required
+def react_to_video(current_user, video_id):
+    data = request.get_json() or {}
+    reaction = data.get("reaction")  # "like" | "dislike"
+
+    if reaction not in ("like", "dislike"):
+        return jsonify({"error": "Invalid reaction"}), 400
+
+    video = Video.query.get(video_id)
+    if not video or not video.is_active:
+        return jsonify({"error": "Video not found"}), 404
+
+    existing = VideoReaction.query.filter_by(
+        video_id=video.id,
+        user_id=current_user.id
+    ).first()
+
+    try:
+        if existing:
+            # Same reaction → remove (toggle off)
+            if existing.reaction == reaction:
+                db.session.delete(existing)
+                if reaction == "like":
+                    video.like_count = max(0, video.like_count - 1)
+            else:
+                # Switch reaction
+                if existing.reaction == "like":
+                    video.like_count = max(0, video.like_count - 1)
+                if reaction == "like":
+                    video.like_count += 1
+
+                existing.reaction = reaction
+        else:
+            new_reaction = VideoReaction(
+                video_id=video.id,
+                user_id=current_user.id,
+                reaction=reaction,
+            )
+            db.session.add(new_reaction)
+            if reaction == "like":
+                video.like_count += 1
+
+        video.updated_at = datetime.utcnow()
+        db.session.commit()
+
+    except IntegrityError:
+        db.session.rollback()
+        return jsonify({"error": "Reaction conflict"}), 409
+
+    return jsonify({
+        "ok": True,
+        "reaction": reaction,
+        "like_count": video.like_count,
+    }), 200
+
+# ===================================
+# User share video
+# ==================================
+@videos_bp.route("/<uuid:video_id>/reaction", methods=["GET"])
+@token_required
+def get_user_reaction(current_user, video_id):
+    reaction = VideoReaction.query.filter_by(
+        video_id=video_id,
+        user_id=current_user.id
+    ).first()
+
+    return jsonify({
+        "reaction": reaction.reaction if reaction else None
+    }), 200
+
+# ===================================
+# Guest share video
+# =================================
+@videos_bp.route("/<uuid:video_id>/share", methods=["POST"])
+def share_video(video_id):
+    video = Video.query.get(video_id)
+    if not video or not video.is_active:
+        return jsonify({"error": "Video not found"}), 404
+
+    user_id = _get_optional_user_id_from_bearer()
+
+    db.session.add(VideoShare(
+        video_id=video.id,
+        user_id=user_id,
+        created_at=datetime.utcnow(),
+    ))
+
+    db.session.commit()
+
+    return jsonify({"ok": True}), 200
+
+
+
+# ====================================
+# Guest Reels 
+# ====================================
+
+@videos_bp.route("/reels", methods=["GET"])
+def get_reels():
+    limit = request.args.get("limit", 20, type=int)
+
+    videos = (
+        Video.query
+        .filter(
+            Video.is_active.is_(True),
+            Video.visibility == "public",
+            Video.is_reel.is_(True),
+        )
+        .order_by(Video.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+
+    return jsonify([v.to_dict() for v in videos]), 200
+
+# ==================================
+# Get Reel by ID
+# ==================================
+
+@videos_bp.route("/reels/<uuid:video_id>", methods=["GET"])
+def get_reel(video_id):
+    video = Video.query.get(video_id)
+
+    if (
+        not video
+        or not video.is_active
+        or not video.is_reel
+        or video.visibility != "public"
+    ):
+        return jsonify({"error": "Reel not found"}), 404
+
+    return jsonify(video.to_dict()), 200
+@videos_bp.route("/reels/<uuid:video_id>/view", methods=["POST"])
+def register_reel_view(video_id):
+    video = Video.query.get(video_id)
+
+    if not video or not video.is_active or not video.is_reel:
+        return jsonify({"error": "Reel not found"}), 404
+
+    ip = request.headers.get("X-Forwarded-For", request.remote_addr)
+    now = time()
+    key = (ip, f"reel:{video_id}")
+
+    last_view = view_throttle_cache.get(key)
+    if last_view and (now - last_view) < VIEW_THROTTLE_SECONDS:
+        return jsonify({"ok": True, "throttled": True}), 200
+
+    view_throttle_cache[key] = now
+
+    user_id = _get_optional_user_id_from_bearer()
+
+    db.session.add(VideoView(
+        video_id=video.id,
+        user_id=user_id,
+        ip_address=ip,
+        created_at=datetime.utcnow(),
+    ))
+
+    video.view_count = (video.view_count or 0) + 1
+    video.updated_at = datetime.utcnow()
+
+    db.session.commit()
+
+    return jsonify({"ok": True}), 200
+
+# ==================================
+# React to Reel
+# ==================================
+
+@videos_bp.route("/reels/<uuid:video_id>/react", methods=["POST"])
+@token_required
+def react_to_reel(current_user, video_id):
+    video = Video.query.get(video_id)
+
+    if not video or not video.is_active or not video.is_reel:
+        return jsonify({"error": "Reel not found"}), 404
+
+    data = request.get_json() or {}
+    reaction = data.get("reaction")
+
+    if reaction not in ("like", "dislike"):
+        return jsonify({"error": "Invalid reaction"}), 400
+
+    existing = VideoReaction.query.filter_by(
+        video_id=video.id,
+        user_id=current_user.id
+    ).first()
+
+    if existing:
+        if existing.reaction == reaction:
+            db.session.delete(existing)
+            if reaction == "like":
+                video.like_count = max(0, video.like_count - 1)
+        else:
+            if existing.reaction == "like":
+                video.like_count = max(0, video.like_count - 1)
+            if reaction == "like":
+                video.like_count += 1
+            existing.reaction = reaction
+    else:
+        db.session.add(VideoReaction(
+            video_id=video.id,
+            user_id=current_user.id,
+            reaction=reaction,
+        ))
+        if reaction == "like":
+            video.like_count += 1
+
+    video.updated_at = datetime.utcnow()
+    db.session.commit()
+
+    return jsonify({
+        "ok": True,
+        "reaction": reaction,
+        "like_count": video.like_count,
+    }), 
+    
+#  ==================================
+# Get Reel reaction
+# ==================================  
+    
+    
+@videos_bp.route("/reels/<uuid:video_id>/reaction", methods=["GET"])
+@token_required
+def get_reel_reaction(current_user, video_id):
+    reaction = VideoReaction.query.filter_by(
+        video_id=video_id,
+        user_id=current_user.id
+    ).first()
+
+    return jsonify({
+        "reaction": reaction.reaction if reaction else None
+    }), 200
+
+# ==================================
+# Share Reel
+# ==================================
+
+
+@videos_bp.route("/reels/<uuid:video_id>/share", methods=["POST"])
+def share_reel(video_id):
+    video = Video.query.get(video_id)
+
+    if not video or not video.is_active or not video.is_reel:
+        return jsonify({"error": "Reel not found"}), 404
+
+    user_id = _get_optional_user_id_from_bearer()
+
+    db.session.add(VideoShare(
+        video_id=video.id,
+        user_id=user_id,
+        created_at=datetime.utcnow(),
+    ))
+
+    db.session.commit()
+
+    return jsonify({"ok": True}), 200
+
+
+
+# """""""""""""""""""""""""""""""""
+# User Reels
+# """""""""""""""""""""""""""""""""
+@videos_bp.route("/member/reels", methods=["GET"])
+@token_required
+def get_member_reels(current_user):
+    limit = request.args.get("limit", 20, type=int)
+
+    videos = (
+        Video.query
+        .filter(
+            Video.is_active.is_(True),
+            Video.is_reel.is_(True),
+            Video.visibility.in_(["public", "private"]),
+        )
+        .order_by(Video.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+
+    return jsonify([v.to_dict() for v in videos]), 200
 
 
 

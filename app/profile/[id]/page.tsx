@@ -12,6 +12,10 @@ import AuroraSidebar, {
 import HomeFeed from '@/components/profile/home/HomeFeed';
 import ReelsFeed from '@/components/profile/reels/ReelsFeed';
 
+const API_BASE =
+  process.env.NEXT_PUBLIC_API_BASE_URL ??
+  'http://localhost:5000';
+
 const TOKEN_KEY = 'aurora_user_token';
 
 type PageUser = {
@@ -34,9 +38,9 @@ export default function AuroraProfilePage() {
   const [activeTab, setActiveTab] =
     useState<AuroraSidebarTab>('home');
 
-  /* ---------------------------------------------
-     Auth + User bootstrap
-  --------------------------------------------- */
+  /* =====================================================
+     Auth + user bootstrap
+  ===================================================== */
   useEffect(() => {
     const tokenFromURL = searchParams.get('token');
 
@@ -48,24 +52,21 @@ export default function AuroraProfilePage() {
       tokenFromURL || localStorage.getItem(TOKEN_KEY);
 
     if (!token) {
-      setError('No token found');
+      setError('No auth token');
       setLoading(false);
       return;
     }
 
     (async () => {
       try {
-        const res = await fetch(
-          `${process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:5000'}/api/users/me`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }
-        );
+        const res = await fetch(`${API_BASE}/api/users/me`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
 
         if (!res.ok) {
-          throw new Error(`Server responded with ${res.status}`);
+          throw new Error(`Auth failed (${res.status})`);
         }
 
         const data = (await res.json()) as PageUser;
@@ -76,35 +77,37 @@ export default function AuroraProfilePage() {
 
         setUser(data);
 
-        // ✅ Handle /profile/me or mismatched IDs
-        if (routeId === 'me' || (routeId && routeId !== data.id)) {
+        // ✅ Normalize /profile/me or mismatched IDs
+        if (
+          routeId === 'me' ||
+          (routeId && routeId !== data.id)
+        ) {
           router.replace(`/profile/${data.id}`);
-          return;
         }
       } catch (err) {
-        console.error('❌ Failed to load user:', err);
-        setError('Failed to load profile');
+        console.error('❌ Profile bootstrap failed:', err);
+        setError('Authentication failed');
       } finally {
         setLoading(false);
       }
     })();
-  }, [searchParams, router, routeId]);
+  }, [searchParams, routeId, router]);
 
-  /* ---------------------------------------------
+  /* =====================================================
      Logout
-  --------------------------------------------- */
+  ===================================================== */
   const handleLogout = () => {
     localStorage.removeItem(TOKEN_KEY);
     router.push('/login');
   };
 
-  /* ---------------------------------------------
-     Loading / Error
-  --------------------------------------------- */
+  /* =====================================================
+     Loading / Error states
+  ===================================================== */
   if (loading) {
     return (
-      <div style={{ padding: 24 }}>
-        <h3>Loading…</h3>
+      <div style={{ padding: 32 }}>
+        <h3>Loading profile…</h3>
       </div>
     );
   }
@@ -114,9 +117,9 @@ export default function AuroraProfilePage() {
     return null;
   }
 
-  /* ---------------------------------------------
+  /* =====================================================
      Layout
-  --------------------------------------------- */
+  ===================================================== */
   return (
     <div
       className="aurora-layout"
@@ -128,7 +131,9 @@ export default function AuroraProfilePage() {
         background: 'var(--app-bg)',
       }}
     >
-      {/* Sidebar */}
+      {/* ======================
+         Sidebar
+      ======================= */}
       <AuroraSidebar
         userId={user.id}
         userName={user.full_name}
@@ -137,7 +142,9 @@ export default function AuroraProfilePage() {
         onLogout={handleLogout}
       />
 
-      {/* Main Content */}
+      {/* ======================
+         Main content
+      ======================= */}
       <div
         className="aurora-content"
         style={{
@@ -155,9 +162,9 @@ export default function AuroraProfilePage() {
             transition={{ duration: 0.2 }}
             style={{ minHeight: '100%' }}
           >
-            {/* =========================
-               Tab Routing
-            ========================== */}
+            {/* ======================
+               Tabs
+            ======================= */}
 
             {activeTab === 'home' && (
               <HomeFeed userId={user.id} />
@@ -167,28 +174,37 @@ export default function AuroraProfilePage() {
               <ReelsFeed userId={user.id} />
             )}
 
-            {activeTab !== 'home' && activeTab !== 'reels' && (
-              <div
-                style={{
-                  height: '100%',
-                  borderRadius: 20,
-                  border: '1px dashed var(--aurora-bento-border)',
-                  background: 'var(--aurora-bento-bg)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <div style={{ opacity: 0.6, textAlign: 'center' }}>
-                  <h4 className="fw-light mb-2">
-                    {activeTab.toUpperCase()}
-                  </h4>
-                  <p className="mb-0">
-                    Content will render here
-                  </p>
+            {/* Placeholder tabs */}
+            {activeTab !== 'home' &&
+              activeTab !== 'reels' && (
+                <div
+                  style={{
+                    height: '100%',
+                    borderRadius: 20,
+                    border:
+                      '1px dashed var(--aurora-bento-border)',
+                    background:
+                      'var(--aurora-bento-bg)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <div
+                    style={{
+                      opacity: 0.6,
+                      textAlign: 'center',
+                    }}
+                  >
+                    <h4 className="fw-light mb-2">
+                      {activeTab.toUpperCase()}
+                    </h4>
+                    <p className="mb-0">
+                      Content will render here
+                    </p>
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
           </motion.div>
         </AnimatePresence>
       </div>

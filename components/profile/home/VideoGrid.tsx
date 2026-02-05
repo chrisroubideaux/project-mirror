@@ -2,7 +2,7 @@
 
 'use client';
 
-import VideoCard from './VideoCard';
+import VideoCard from '@/components/profile/videos/VideoCard';
 
 export default function VideoGrid() {
   return (
@@ -14,7 +14,7 @@ export default function VideoGrid() {
       <div className="row g-4">
         {Array.from({ length: 8 }).map((_, i) => (
           <div key={i} className="col-12 col-sm-6 col-lg-4 col-xl-3">
-            <VideoCard />
+            <VideoCard video ={{} as any} />
           </div>
         ))}
       </div>

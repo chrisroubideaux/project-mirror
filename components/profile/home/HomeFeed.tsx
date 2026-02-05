@@ -5,7 +5,7 @@
 import ContinueWatching from './ContinueWatching';
 import FeaturedTrailer from './FeaturedTrailer';
 import ReelsRow from './ReelsRow';
-import VideoGrid from './VideoGrid';
+//import VideoGrid from './VideoGrid';
 import AuroraInsightCard from './AuroraInsightCard';
 
 type Props = {
@@ -18,7 +18,7 @@ export default function HomeFeed({ userId }: Props) {
       <ContinueWatching />
       <FeaturedTrailer />
       <ReelsRow />
-      <VideoGrid />
+    
       <AuroraInsightCard />
     </div>
   );
