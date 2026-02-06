@@ -1,5 +1,4 @@
 // components/profile/videos/VideoPlayer.tsx
-
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
@@ -35,6 +34,7 @@ export default function VideoPlayer({ video }: Props) {
 
   const [liked, setLiked] = useState<boolean | null>(null);
   const [likeCount, setLikeCount] = useState(video.like_count ?? 0);
+  const [pulse, setPulse] = useState(false);
 
   /* -----------------------------
      View registration (once)
@@ -73,6 +73,11 @@ export default function VideoPlayer({ video }: Props) {
 
       setLiked(data.reaction === 'like');
       setLikeCount(data.like_count);
+
+      if (data.reaction === 'like') {
+        setPulse(true);
+        setTimeout(() => setPulse(false), 300);
+      }
     } catch (err) {
       console.error('❌ Reaction error:', err);
     }
@@ -155,7 +160,9 @@ export default function VideoPlayer({ video }: Props) {
             }}
           >
             <ActionButton
+              variant="like"
               active={liked === true}
+              pulse={pulse}
               onClick={() => sendReaction('like')}
               icon={
                 liked === true ? (
@@ -168,6 +175,7 @@ export default function VideoPlayer({ video }: Props) {
             />
 
             <ActionButton
+              variant="dislike"
               active={liked === false}
               onClick={() => sendReaction('dislike')}
               icon={
@@ -180,6 +188,7 @@ export default function VideoPlayer({ video }: Props) {
             />
 
             <ActionButton
+              variant="neutral"
               onClick={handleShare}
               icon={<AiOutlineShareAlt size={18} />}
               label="Share"
@@ -226,12 +235,36 @@ function ActionButton({
   label,
   onClick,
   active,
+  pulse,
+  variant,
 }: {
   icon: React.ReactNode;
   label?: string;
   onClick: () => void;
   active?: boolean;
+  pulse?: boolean;
+  variant: 'like' | 'dislike' | 'neutral';
 }) {
+  const styles = {
+    like: {
+      bg: 'rgba(0,180,255,0.15)',
+      glow: '0 0 12px rgba(0,180,255,0.6)',
+      color: '#00b4ff',
+    },
+    dislike: {
+      bg: 'rgba(255,80,80,0.15)',
+      glow: '0 0 12px rgba(255,80,80,0.6)',
+      color: '#ff5050',
+    },
+    neutral: {
+      bg: 'rgba(255,255,255,0.08)',
+      glow: 'none',
+      color: '#fff',
+    },
+  };
+
+  const s = active ? styles[variant] : styles.neutral;
+
   return (
     <button
       onClick={onClick}
@@ -243,12 +276,18 @@ function ActionButton({
         borderRadius: 999,
         padding: '8px 14px',
         cursor: 'pointer',
-        background: active
-          ? 'var(--accent)'
-          : 'rgba(255,255,255,0.08)',
-        color: active ? '#000' : '#fff',
+        background: s.bg,
+        color: s.color,
+        boxShadow: active ? s.glow : 'none',
         fontSize: 14,
-        transition: 'all 0.2s ease',
+        transform: pulse ? 'scale(1.12)' : 'none',
+        transition: 'all 0.25s ease',
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.transform = 'translateY(-1px)';
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.transform = 'none';
       }}
     >
       {icon}
