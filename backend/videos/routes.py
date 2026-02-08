@@ -1180,6 +1180,9 @@ def get_watch_history(current_user):
     return jsonify([video.to_dict() for video in videos]), 200
 
 # =====================================================
+# REGISTER VIDEO VIEW
+# =====================================================
+
 @videos_bp.route("/member/<uuid:video_id>/view", methods=["POST"])
 @token_required
 def register_member_view(current_user, video_id):
@@ -1200,7 +1203,9 @@ def register_member_view(current_user, video_id):
 
     return jsonify({"ok": True}), 200
 
-
+# =====================================================
+# DEV TOOL: CLEAR VIDEO VIEWS
+# =====================================================
 
 @videos_bp.route("/admin/dev/clear-video-views", methods=["DELETE"])
 @admin_token_required
@@ -1208,3 +1213,24 @@ def clear_video_views_dev(current_admin):
     db.session.execute(text("DELETE FROM video_views"))
     db.session.commit()
     return jsonify({"ok": True}), 200
+
+# =====================================================
+# GET LIKED VIDEOS
+# =====================================================
+
+@videos_bp.route("/liked", methods=["GET"])
+@token_required
+def get_liked_videos(current_user):
+    videos = (
+        db.session.query(Video)
+        .join(VideoReaction, VideoReaction.video_id == Video.id)
+        .filter(
+            VideoReaction.user_id == current_user.id,
+            VideoReaction.reaction == "like",
+            Video.is_active.is_(True),
+        )
+        .order_by(VideoReaction.created_at.desc())
+        .all()
+    )
+
+    return jsonify([v.to_dict() for v in videos]), 200
