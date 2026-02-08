@@ -39,12 +39,26 @@ export default function VideoPlayer({ video }: Props) {
   /* -----------------------------
      View registration (once)
   ----------------------------- */
+  {/*
   useEffect(() => {
     fetch(`${API_BASE}/api/videos/${video.id}/view`, {
       method: 'POST',
     }).catch(() => {});
   }, [video.id]);
+*/}
+  
+  useEffect(() => {
+  const token = localStorage.getItem(TOKEN_KEY);
 
+  fetch(`${API_BASE}/api/videos/${video.id}/view`, {
+    method: 'POST',
+    headers: token
+      ? { Authorization: `Bearer ${token}` }
+      : undefined,
+  }).catch(() => {});
+}, [video.id]);
+
+  
   /* -----------------------------
      Like / Dislike (authoritative)
   ----------------------------- */

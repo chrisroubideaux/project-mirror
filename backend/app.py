@@ -1,4 +1,3 @@
-# backend/app.py
 from dotenv import load_dotenv
 load_dotenv()  # MUST BE FIRST — before any config access
 

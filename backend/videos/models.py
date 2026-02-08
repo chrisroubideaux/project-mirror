@@ -1,7 +1,5 @@
 # backend/videos/models.py
 
-# backend/videos/models.py
-
 import uuid
 from datetime import datetime
 
