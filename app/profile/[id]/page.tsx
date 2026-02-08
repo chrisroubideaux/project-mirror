@@ -11,6 +11,8 @@ import AuroraSidebar, {
 
 import HomeFeed from '@/components/profile/home/HomeFeed';
 import ReelsFeed from '@/components/profile/reels/ReelsFeed';
+import WatchingFeed from '@/components/profile/watching/WatchingFeed';
+import HistoryFeed from '@/components/profile/history/HistoryFeed';
 
 const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE_URL ??
@@ -170,41 +172,19 @@ export default function AuroraProfilePage() {
               <HomeFeed userId={user.id} />
             )}
 
+            {activeTab === 'watching' && (
+              <WatchingFeed userId={user.id} />
+            )}
+
+            {activeTab === 'history' && (
+              <HistoryFeed userId={user.id} />
+            )}
+
             {activeTab === 'reels' && (
               <ReelsFeed userId={user.id} />
             )}
 
-            {/* Placeholder tabs */}
-            {activeTab !== 'home' &&
-              activeTab !== 'reels' && (
-                <div
-                  style={{
-                    height: '100%',
-                    borderRadius: 20,
-                    border:
-                      '1px dashed var(--aurora-bento-border)',
-                    background:
-                      'var(--aurora-bento-bg)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <div
-                    style={{
-                      opacity: 0.6,
-                      textAlign: 'center',
-                    }}
-                  >
-                    <h4 className="fw-light mb-2">
-                      {activeTab.toUpperCase()}
-                    </h4>
-                    <p className="mb-0">
-                      Content will render here
-                    </p>
-                  </div>
-                </div>
-              )}
+            
           </motion.div>
         </AnimatePresence>
       </div>
