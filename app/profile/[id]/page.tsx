@@ -13,6 +13,8 @@ import HomeFeed from '@/components/profile/home/HomeFeed';
 import ReelsFeed from '@/components/profile/reels/ReelsFeed';
 import WatchingFeed from '@/components/profile/watching/WatchingFeed';
 import HistoryFeed from '@/components/profile/history/HistoryFeed';
+import LikedFeed from '@/components/profile/liked/LikedFeed';
+
 
 const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE_URL ??
@@ -183,7 +185,9 @@ export default function AuroraProfilePage() {
             {activeTab === 'reels' && (
               <ReelsFeed userId={user.id} />
             )}
-
+            {activeTab === 'liked' && (
+              <LikedFeed userId={user.id} />
+            )}
             
           </motion.div>
         </AnimatePresence>
