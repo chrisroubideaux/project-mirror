@@ -1,8 +1,9 @@
 // components/profile/videos/VideoCard.tsx
 'use client';
 
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useRef, useState } from 'react';
+import { FaHeart, FaRegHeart } from 'react-icons/fa';
 
 export type ProfileVideo = {
   id: string;
@@ -21,21 +22,45 @@ export type ProfileVideo = {
   progress?: number;
 };
 
+type Props = {
+  video: ProfileVideo;
+  onUnliked?: (videoId: string) => void;
+};
+
 const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:5000';
 
-export default function VideoCard({
-  video,
-}: {
-  video: ProfileVideo;
-}) {
+const TOKEN_KEY = 'aurora_user_token';
+
+export default function VideoCard({ video, onUnliked }: Props) {
   const router = useRouter();
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
   const [hovered, setHovered] = useState(false);
 
-  // 🔒 Prevent double registration
+  // ❤️ state
+  const [liked, setLiked] = useState(false);
+  const [heartPulse, setHeartPulse] = useState(false);
+
+  // 🔒 prevent double view registration
   const hasRegisteredViewRef = useRef(false);
+
+  /* ============================
+     Hydrate liked state
+  ============================ */
+  useEffect(() => {
+    const token = localStorage.getItem(TOKEN_KEY);
+    if (!token) return;
+
+    fetch(`${API_BASE}/api/videos/${video.id}/reaction`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (d?.reaction === 'like') setLiked(true);
+      })
+      .catch(() => {});
+  }, [video.id]);
 
   /* ============================
      Register view (CLICK ONLY)
@@ -44,7 +69,7 @@ export default function VideoCard({
     if (hasRegisteredViewRef.current) return;
     hasRegisteredViewRef.current = true;
 
-    const token = localStorage.getItem('aurora_user_token');
+    const token = localStorage.getItem(TOKEN_KEY);
 
     const endpoint = token
       ? `/api/videos/member/${video.id}/view`
@@ -52,10 +77,46 @@ export default function VideoCard({
 
     fetch(`${API_BASE}${endpoint}`, {
       method: 'POST',
-      headers: token
-        ? { Authorization: `Bearer ${token}` }
-        : undefined,
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
     }).catch(() => {});
+  };
+
+  /* ============================
+     Like toggle (heart button)
+     - uses /react (toggle behavior)
+     - if it becomes unliked, remove from Liked tab
+  ============================ */
+  const toggleLike = async (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.stopPropagation();
+
+    const token = localStorage.getItem(TOKEN_KEY);
+    if (!token) return;
+
+    try {
+      const res = await fetch(`${API_BASE}/api/videos/${video.id}/react`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ reaction: 'like' }),
+      });
+
+      if (!res.ok) throw new Error('Like failed');
+
+      // Backend toggles: if already liked -> it removes row
+      // We infer new state locally:
+      if (liked) {
+        setLiked(false);
+        onUnliked?.(video.id);
+      } else {
+        setLiked(true);
+        setHeartPulse(true);
+        setTimeout(() => setHeartPulse(false), 260);
+      }
+    } catch (err) {
+      console.error('❌ Like toggle failed:', err);
+    }
   };
 
   /* ============================
@@ -80,10 +141,7 @@ export default function VideoCard({
   const uploadDate = new Date(video.created_at);
   const timeAgo = `${Math.max(
     1,
-    Math.floor(
-      (Date.now() - uploadDate.getTime()) /
-        (1000 * 60 * 60 * 24)
-    )
+    Math.floor((Date.now() - uploadDate.getTime()) / (1000 * 60 * 60 * 24))
   )}d ago`;
 
   /* ============================
@@ -111,8 +169,7 @@ export default function VideoCard({
         width: 300,
         cursor: 'pointer',
         borderRadius: 16,
-        transition:
-          'transform 0.25s ease, box-shadow 0.25s ease',
+        transition: 'transform 0.25s ease, box-shadow 0.25s ease',
         transform: hovered ? 'translateY(-6px)' : 'none',
         boxShadow: hovered
           ? '0 18px 40px rgba(0,0,0,0.45)'
@@ -172,6 +229,54 @@ export default function VideoCard({
           }}
         />
 
+        {/* TYPE / TRAILER BADGE */}
+        <div
+          style={{
+            position: 'absolute',
+            top: 8,
+            left: 8,
+            padding: '4px 8px',
+            fontSize: 11,
+            borderRadius: 6,
+            background: 'rgba(0,0,0,0.65)',
+            color: '#fff',
+            textTransform: 'uppercase',
+            letterSpacing: 0.6,
+          }}
+        >
+          {video.type}
+        </div>
+
+        {/* HEART BUTTON */}
+        <button
+          type="button"
+          onClick={toggleLike}
+          aria-label={liked ? 'Unlike' : 'Like'}
+          title={liked ? 'Unlike' : 'Like'}
+          style={{
+            position: 'absolute',
+            top: 8,
+            right: 8,
+            width: 36,
+            height: 36,
+            borderRadius: '50%',
+            border: 'none',
+            cursor: 'pointer',
+            background: 'rgba(0,0,0,0.6)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: liked ? '#ff4d6d' : '#fff',
+            transform: heartPulse ? 'scale(1.25)' : 'scale(1)',
+            transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+            boxShadow: heartPulse
+              ? '0 0 14px rgba(255,77,109,0.85)'
+              : 'none',
+          }}
+        >
+          {liked ? <FaHeart size={16} /> : <FaRegHeart size={16} />}
+        </button>
+
         {/* PLAY ICON */}
         {!hovered && (
           <div
@@ -200,24 +305,6 @@ export default function VideoCard({
             </div>
           </div>
         )}
-
-        {/* TYPE BADGE */}
-        <div
-          style={{
-            position: 'absolute',
-            top: 8,
-            left: 8,
-            padding: '4px 8px',
-            fontSize: 11,
-            borderRadius: 6,
-            background: 'rgba(0,0,0,0.65)',
-            color: '#fff',
-            textTransform: 'uppercase',
-            letterSpacing: 0.6,
-          }}
-        >
-          {video.type}
-        </div>
 
         {/* DURATION */}
         <div
@@ -250,10 +337,7 @@ export default function VideoCard({
             <div
               style={{
                 height: '100%',
-                width: `${Math.min(
-                  100,
-                  Math.max(0, video.progress * 100)
-                )}%`,
+                width: `${Math.min(100, Math.max(0, video.progress * 100))}%`,
                 background: '#00e0ff',
               }}
             />
@@ -311,6 +395,7 @@ export default function VideoCard({
 
 
 {/*
+// components/profile/videos/VideoCard.tsx
 'use client';
 
 import { useRouter } from 'next/navigation';
@@ -333,6 +418,9 @@ export type ProfileVideo = {
   progress?: number;
 };
 
+const API_BASE =
+  process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:5000';
+
 export default function VideoCard({
   video,
 }: {
@@ -343,64 +431,39 @@ export default function VideoCard({
 
   const [hovered, setHovered] = useState(false);
 
-  // 🔒 Prevent double view fires
+  // 🔒 Prevent double registration
   const hasRegisteredViewRef = useRef(false);
-  {/*
+
   const registerView = () => {
     if (hasRegisteredViewRef.current) return;
     hasRegisteredViewRef.current = true;
 
-    fetch(
-      `${
-        process.env.NEXT_PUBLIC_API_BASE_URL ??
-        'http://localhost:5000'
-      }/api/videos/${video.id}/view`,
-      { method: 'POST' }
-    ).catch(() => {});
-  };
-    
+    const token = localStorage.getItem('aurora_user_token');
 
-const registerView = () => {
-  if (hasRegisteredViewRef.current) return;
-  hasRegisteredViewRef.current = true;
+    const endpoint = token
+      ? `/api/videos/member/${video.id}/view`
+      : `/api/videos/${video.id}/view`;
 
-  const token = localStorage.getItem('aurora_user_token');
-
-  fetch(
-    `${
-      process.env.NEXT_PUBLIC_API_BASE_URL ??
-      'http://localhost:5000'
-    }/api/videos/${video.id}/view`,
-    {
+    fetch(`${API_BASE}${endpoint}`, {
       method: 'POST',
       headers: token
         ? { Authorization: `Bearer ${token}` }
         : undefined,
-    }
-  ).catch(() => {});
-};
+    }).catch(() => {});
+  };
 
-
-
-const handleMouseEnter = () => {
-  setHovered(true);
-
-  // ✅ REGISTER VIEW IMMEDIATELY (auth-safe)
-  registerView();
-
-  const v = videoRef.current;
-  if (!v) return;
-
-  v.currentTime = 0;
-  v.play().catch(() => {});
-};
+  const handleMouseEnter = () => {
+    setHovered(true);
+    const v = videoRef.current;
+    if (!v) return;
+    v.currentTime = 0;
+    v.play().catch(() => {});
+  };
 
   const handleMouseLeave = () => {
     setHovered(false);
-
     const v = videoRef.current;
     if (!v) return;
-
     v.pause();
     v.currentTime = 0;
   };
@@ -414,13 +477,18 @@ const handleMouseEnter = () => {
     )
   )}d ago`;
 
+ 
   return (
     <article
       role="button"
       tabIndex={0}
-      onClick={() => router.push(`/profile/videos/${video.id}`)}
+      onClick={() => {
+        registerView();
+        router.push(`/profile/videos/${video.id}`);
+      }}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
+          registerView();
           router.push(`/profile/videos/${video.id}`);
         }
       }}
@@ -441,7 +509,7 @@ const handleMouseEnter = () => {
         background: 'transparent',
       }}
     >
-      
+     
       <div
         style={{
           position: 'relative',
@@ -491,7 +559,6 @@ const handleMouseEnter = () => {
             pointerEvents: 'none',
           }}
         />
-
 
         {!hovered && (
           <div
@@ -553,6 +620,7 @@ const handleMouseEnter = () => {
           {video.duration ?? '—'}
         </div>
 
+       
         {typeof video.progress === 'number' && (
           <div
             style={{
@@ -578,6 +646,7 @@ const handleMouseEnter = () => {
         )}
       </div>
 
+   
       <div style={{ display: 'flex', gap: 10, paddingTop: 12 }}>
         {video.series_avatar_url ? (
           <img
@@ -617,12 +686,14 @@ const handleMouseEnter = () => {
             {video.subtitle ?? video.type}
           </div>
           <div style={{ fontSize: 11, opacity: 0.5 }}>
-            {(video.view_count ?? 0).toLocaleString()} views •{' '}
-            {timeAgo}
+            {(video.view_count ?? 0).toLocaleString()} views • {timeAgo}
           </div>
         </div>
       </div>
     </article>
   );
 }
+
+
+  #000
 */}
