@@ -1,4 +1,5 @@
 // components/avatar/AuroraPresence.tsx
+// components/avatar/AuroraPresence.tsx
 "use client";
 
 import { useEffect, useRef, useState } from "react";
@@ -424,12 +425,21 @@ function AuroraButton({
   );
 }
 
-
 {/*
+// components/avatar/AuroraPresence.tsx
 "use client";
 
-import { useEffect, useRef } from "react";
-import type { AuroraState, EmotionPayload } from "@/components/camera/RealTimeEmotionCamera";
+import { useEffect, useRef, useState } from "react";
+import { motion } from "framer-motion";
+
+import RealTimeEmotionCamera, {
+  AuroraState,
+  EmotionPayload,
+  RealTimeEmotionCameraHandle,
+} from "@/components/camera/RealTimeEmotionCamera";
+import { FaPlay, FaStop } from "react-icons/fa";
+
+
 
 type Particle = {
   angle: number;
@@ -439,58 +449,70 @@ type Particle = {
   seed: number;
 };
 
-const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
+const clamp = (v: number, a: number, b: number) =>
+  Math.max(a, Math.min(b, v));
+
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 const smoothstep = (t: number) => t * t * (3 - 2 * t);
 
-// Lightweight smooth noise (Perlin-ish value noise)
+
+
 function hash1(n: number) {
   const s = Math.sin(n) * 43758.5453123;
   return s - Math.floor(s);
 }
+
 function noise1(x: number) {
   const i = Math.floor(x);
   const f = x - i;
-  const a = hash1(i);
-  const b = hash1(i + 1);
-  return lerp(a, b, smoothstep(f));
+  return lerp(hash1(i), hash1(i + 1), smoothstep(f));
 }
 
-export default function AuroraPresence({
-  state,
-  emotion,
-  audio,
-}: {
-  state: AuroraState;
-  emotion: EmotionPayload | null;
-  audio: HTMLAudioElement | null;
-}) {
+
+
+export default function AuroraPresence() {
+  
+
+  const [state, setState] = useState<AuroraState>("idle");
+  const [emotion, setEmotion] = useState<EmotionPayload | null>(null);
+
+
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const particlesRef = useRef<Particle[]>([]);
   const rafRef = useRef<number | null>(null);
 
-  // ---- audio ----
+  const cameraRef = useRef<RealTimeEmotionCameraHandle | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+
   const audioCtxRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const sourceRef = useRef<MediaElementAudioSourceNode | null>(null);
   const dataRef = useRef<Uint8Array | null>(null);
 
-  // Envelopes for syllable pulses
-  const envSlowRef = useRef(0);
-  const envFastRef = useRef(0);
-  const envSmoothedRef = useRef(0);
+  const envFast = useRef(0);
+  const envSlow = useRef(0);
+  const envSmooth = useRef(0);
 
-  // ---- motion ----
-  const rotationRef = useRef(0);
-  const tRef = useRef(0);
 
-  // ---- talking hesitation ----
-  const prevStateRef = useRef<AuroraState>("idle");
-  const talkStartRef = useRef<number>(0);
 
-  // ---------------------------------------------
-  // INIT PARTICLES (WITH MEMORY)
-  // ---------------------------------------------
+  const rotation = useRef(0);
+  const time = useRef(0);
+
+  const prevState = useRef<AuroraState>("idle");
+  const talkStart = useRef(0);
+
+
+  const start = async () => {
+    await cameraRef.current?.startSession();
+  };
+
+  const stop = () => {
+    cameraRef.current?.stopSession();
+  };
+
+
+
   const initParticles = (count: number) => {
     particlesRef.current = Array.from({ length: count }).map(() => {
       const r = Math.sqrt(Math.random());
@@ -499,31 +521,31 @@ export default function AuroraPresence({
         radius: r,
         vel: 0,
         pbest: r,
-        seed: Math.random() * 1000,
+        seed: Math.random() * 999,
       };
     });
   };
 
-  // ---------------------------------------------
-  // AUDIO PIPELINE
-  // ---------------------------------------------
-  const ensureAudioPipeline = () => {
+
+  const ensureAudio = () => {
+    const audio = audioRef.current;
     if (!audio || audio.readyState < 2) return;
 
     if (!audioCtxRef.current) audioCtxRef.current = new AudioContext();
 
     if (!analyserRef.current) {
-      const an = audioCtxRef.current.createAnalyser();
-      an.fftSize = 1024;
-      an.smoothingTimeConstant = 0.85;
-      analyserRef.current = an;
-      dataRef.current = new Uint8Array(an.fftSize);
+      const analyser = audioCtxRef.current.createAnalyser();
+      analyser.fftSize = 1024;
+      analyser.smoothingTimeConstant = 0.85;
+      analyserRef.current = analyser;
+      dataRef.current = new Uint8Array(analyser.fftSize);
     }
 
     if (!sourceRef.current) {
-      sourceRef.current = audioCtxRef.current.createMediaElementSource(audio);
+      sourceRef.current =
+        audioCtxRef.current.createMediaElementSource(audio);
       sourceRef.current.connect(analyserRef.current);
-      analyserRef.current.connect(audioCtxRef.current.destination);
+      analyserRef.current!.connect(audioCtxRef.current.destination);
     }
 
     if (audioCtxRef.current.state === "suspended") {
@@ -531,50 +553,50 @@ export default function AuroraPresence({
     }
   };
 
-  // Re-arm on every utterance
+
   useEffect(() => {
+    const audio = audioRef.current;
     if (!audio) return;
 
-    const onPlay = () => {
-      // reset envelopes so each reply "kicks" again
-      envSlowRef.current = 0;
-      envFastRef.current = 0;
-      envSmoothedRef.current = 0;
-      ensureAudioPipeline();
+    const kick = () => {
+      envFast.current = 0;
+      envSlow.current = 0;
+      envSmooth.current = 0;
+      ensureAudio();
     };
 
-    audio.addEventListener("play", onPlay);
-    audio.addEventListener("playing", onPlay);
+    audio.addEventListener("play", kick);
+    return () => audio.removeEventListener("play", kick);
+  }, []);
 
-    return () => {
-      audio.removeEventListener("play", onPlay);
-      audio.removeEventListener("playing", onPlay);
-    };
-  }, [audio]);
 
-  // ---------------------------------------------
-  // MAIN LOOP (PSO + syllables + hesitation + field + perlin breath)
-  // ---------------------------------------------
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
+
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
     const resize = () => {
-      const w = canvas.parentElement?.clientWidth ?? 800;
-      const h = 420;
+      const parent = canvas.parentElement;
+      if (!parent) return;
+
+      const w = parent.clientWidth;
+      const h = parent.clientHeight;
       const dpr = window.devicePixelRatio || 1;
 
-      canvas.width = w * dpr;
-      canvas.height = h * dpr;
+      canvas.width = Math.floor(w * dpr);
+      canvas.height = Math.floor(h * dpr);
+
       canvas.style.width = `${w}px`;
       canvas.style.height = `${h}px`;
+
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     };
 
     resize();
     window.addEventListener("resize", resize);
+
     initParticles(900);
 
     const tick = () => {
@@ -585,150 +607,148 @@ export default function AuroraPresence({
       const cx = w / 2;
       const cy = h / 2;
 
-      // time
-      tRef.current += 1 / 60;
+      time.current += 1 / 60;
 
-      // detect state transition for "thinking hesitation"
-      if (prevStateRef.current !== state) {
-        if (state === "talking") {
-          talkStartRef.current = performance.now();
-        }
-        prevStateRef.current = state;
+      if (prevState.current !== state) {
+        if (state === "talking") talkStart.current = performance.now();
+        prevState.current = state;
       }
 
-      // paint fade
-      ctx.fillStyle = "rgba(0,0,0,0.18)";
-      ctx.fillRect(0, 0, w, h);
-
-      // rotation (subtle)
-      rotationRef.current += state === "talking" ? 0.0015 : 0.0006;
-
-      // ---------- AUDIO ENVELOPES ----------
-      let rawRms = 0;
-
-      if (state === "talking" && audio) {
-        ensureAudioPipeline();
+      let rms = 0;
+      if (state === "talking") {
+        ensureAudio();
         if (analyserRef.current && dataRef.current) {
           analyserRef.current.getByteTimeDomainData(dataRef.current);
-
           let sum = 0;
           for (let i = 0; i < dataRef.current.length; i++) {
             const v = (dataRef.current[i] - 128) / 128;
             sum += v * v;
           }
-          rawRms = Math.sqrt(sum / dataRef.current.length);
+          rms = Math.sqrt(sum / dataRef.current.length);
         }
       }
 
-      // Two envelopes -> syllable detector (fast - slow)
-      // fast follows syllables, slow is baseline
-      envFastRef.current += (rawRms - envFastRef.current) * 0.35;
-      envSlowRef.current += (rawRms - envSlowRef.current) * 0.06;
+      envFast.current += (rms - envFast.current) * 0.35;
+      envSlow.current += (rms - envSlow.current) * 0.06;
+      envSmooth.current += (rms - envSmooth.current) * 0.045;
 
-      // smooth main energy (fluid)
-      envSmoothedRef.current += (rawRms - envSmoothedRef.current) * 0.08;
+      const energy = envSmooth.current;
+      const syllable = clamp(
+        (envFast.current - envSlow.current) * 10,
+        0,
+        1
+      );
 
-      const audioEnergy = envSmoothedRef.current;
-
-      // syllable pulse 0..1
-      const syllable = clamp((envFastRef.current - envSlowRef.current) * 10, 0, 1);
-
-      // ---------- EMOTION ----------
       const arousal = emotion?.arousal ?? 0.5;
       const valence = emotion?.valence ?? 0.5;
+      const dominance = emotion?.dominance ?? 0.5;
 
-      // ---------- "Thinking hesitation" ramp ----------
-      // First ~250ms of talking ramps the swarm influence in (feels like intention forming)
-      const hesMs = 260;
-      const dt = performance.now() - talkStartRef.current;
-      const hesitationRamp = state === "talking" ? clamp(dt / hesMs, 0, 1) : 0;
-      const hes = smoothstep(hesitationRamp);
+      const hesitation = smoothstep(
+        state === "talking"
+          ? clamp((performance.now() - talkStart.current) / 260, 0, 1)
+          : 0
+      );
 
-      // ---------- Perlin-ish breath turbulence ----------
-      // Gentle base breath + turbulence that scales with arousal
-      const baseBreath = Math.sin(tRef.current * 1.2) * 0.018; // slow inhale/exhale
-      const turbAmp = 0.012 * (0.35 + arousal); // arousal -> more shimmer
+      const hueBase = 190 + valence * 60;
+      const breathe = Math.sin(time.current * 0.4) * 8;
+      const hue = hueBase + breathe;
 
-      // ---------- GLOBAL BEST ----------
-      // gBest is the swarm "intention"
-      const gBase = 1 + audioEnergy * 0.85 + arousal * 0.28;
-      const gPulse = syllable * 0.45; // temporary shifts on syllables
-      const gBest = gBase + gPulse * hes; // syllables only kick when talking has "formed"
+      const bg = ctx.createRadialGradient(
+        cx,
+        cy,
+        Math.min(w, h) * 0.2,
+        cx,
+        cy,
+        Math.max(w, h)
+      );
 
-      // ---------- PSO COEFFS ----------
-      // Make social pull ramp in with hesitation so it feels like she "gathers thoughts"
-      const omega = state === "talking" ? lerp(0.94, 0.90, hes) : 0.95; // inertia
-      const c1 = 0.04; // memory
-      const c2 = state === "talking" ? lerp(0.02, 0.095, hes) : 0.03; // cohesion ramps in
+      bg.addColorStop(0, `hsla(${hue},70%,55%,0.25)`);
+      bg.addColorStop(0.5, `hsla(${hue - 30},55%,30%,0.35)`);
+      bg.addColorStop(1, `hsla(${hue - 60},40%,10%,0.45)`);
 
-      // ---------- Field distortion visualization ----------
-      const baseRadiusPx = Math.min(w, h) * 0.32;
-      const fieldR = baseRadiusPx * gBest;
+      ctx.fillStyle = bg;
+      ctx.fillRect(0, 0, w, h);
 
-      // draw faint field ring + gradient (subtle)
+      rotation.current +=
+        (state === "talking" ? 0.0012 : 0.0005) *
+        (0.8 + dominance * 0.6);
+
+      const baseR = Math.min(w, h) * 0.32;
+      const inwardPull =
+        state === "talking" ? 0 : -0.08 * (1 - energy);
+
+      const gBest =
+        1 +
+        energy * (0.8 + arousal * 0.6) +
+        syllable * 0.4 +
+        inwardPull;
+
+      const omega =
+        state === "talking"
+          ? lerp(0.975, 0.955, hesitation)
+          : 0.99;
+
+      const c1 = 0.035;
+      const c2 =
+        state === "talking"
+          ? lerp(0.015, 0.055, hesitation) *
+            (0.8 + dominance * 0.6)
+          : 0.015;
+
+      const turbAmp = 0.006 * (0.25 + arousal * 1.2);
+      const breath = Math.sin(time.current * 1.2) * 0.018;
+
       ctx.save();
       ctx.globalCompositeOperation = "lighter";
-      const alphaField = 0.06 + 0.10 * hes + 0.10 * syllable;
-      const grad = ctx.createRadialGradient(cx, cy, fieldR * 0.55, cx, cy, fieldR * 1.15);
-      grad.addColorStop(0, `rgba(120,210,255,0)`);
-      grad.addColorStop(0.7, `rgba(120,210,255,${alphaField})`);
-      grad.addColorStop(1, `rgba(120,210,255,0)`);
-      ctx.fillStyle = grad;
-      ctx.beginPath();
-      ctx.arc(cx, cy, fieldR * 1.15, 0, Math.PI * 2);
-      ctx.fill();
 
-      ctx.lineWidth = 1.2;
-      ctx.strokeStyle = `rgba(140,220,255,${0.10 + 0.18 * syllable})`;
-      ctx.beginPath();
-      ctx.arc(cx, cy, fieldR, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.restore();
-
-      // ---------- PARTICLES ----------
       for (const p of particlesRef.current) {
-        // per-particle turbulence using smooth noise
-        const n = noise1(p.seed + p.angle * 3 + tRef.current * 0.55);
-        const turbulence = (n - 0.5) * turbAmp;
+        const n = noise1(p.seed + p.angle * 3 + time.current * 0.55);
+        const turb = (n - 0.5) * turbAmp;
 
-        // breath blends with turbulence
-        const breath = baseBreath + turbulence;
-
-        // subtle angular drift increases on syllables (adds “life”)
-        p.angle += 0.00012 + (audioEnergy * 0.00045 + syllable * 0.00055) * hes;
-
-        // PSO update
-        const r1 = Math.random();
-        const r2 = Math.random();
+        p.angle +=
+          0.00012 +
+          (energy + syllable) *
+            (0.0004 + dominance * 0.0003) *
+            hesitation;
 
         p.vel =
           omega * p.vel +
-          c1 * r1 * (p.pbest - p.radius) +
-          c2 * r2 * (gBest - p.radius);
+          c1 * Math.random() * (p.pbest - p.radius) +
+          c2 * Math.random() * (gBest - p.radius);
 
         p.radius += p.vel;
-
-        // constrain a bit so swarm doesn’t blow out
         p.radius = clamp(p.radius, 0.05, 1.75);
+        p.pbest += (p.radius - p.pbest) * 0.0015;
 
-        // update memory VERY slowly (keeps character)
-        p.pbest += (p.radius - p.pbest) * 0.0016;
-
-        // position
-        const a = p.angle + rotationRef.current;
-        const r = baseRadiusPx * (p.radius + breath);
+        const a = p.angle + rotation.current;
+        const r = baseR * (p.radius + breath + turb);
 
         const x = cx + Math.cos(a) * r;
         const y = cy + Math.sin(a) * r;
 
-        // alpha follows valence + subtle syllable sparkle
-        const alpha = clamp(0.20 + valence * 0.25 + syllable * 0.12, 0.12, 0.60);
+        const particleHue =
+          hue +
+          (valence - 0.5) * 40 +
+          (p.seed % 1) * 14;
+
+        const alpha = clamp(
+          0.22 + valence * 0.25 + syllable * 0.12,
+          0.15,
+          0.65
+        );
 
         ctx.beginPath();
-        ctx.arc(x, y, 1.08, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(140,220,255,${alpha})`;
+        ctx.arc(x, y, 2.8, 0, Math.PI * 2);
+        ctx.fillStyle = `hsla(${particleHue},85%,65%,${alpha * 0.12})`;
+        ctx.fill();
+
+        ctx.beginPath();
+        ctx.arc(x, y, 1.1, 0, Math.PI * 2);
+        ctx.fillStyle = `hsla(${particleHue},75%,60%,${alpha})`;
         ctx.fill();
       }
+
+      ctx.restore();
     };
 
     tick();
@@ -737,15 +757,73 @@ export default function AuroraPresence({
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
       window.removeEventListener("resize", resize);
     };
-  }, [state, emotion, audio]);
+  }, [state, emotion]);
+
 
   return (
-    <div className="aurora-presence">
-      <canvas ref={canvasRef} className="aurora-canvas" />
+    <div className="aurora-player">
+      <div className="aurora-player__screen aurora-presence">
+        <canvas ref={canvasRef} className="aurora-canvas" />
+        <div className="aurora-vignette" />
+
+        <div className="aurora-player__overlay">
+          {state === "talking" && (
+            <span className="aurora-player__live">LIVE</span>
+          )}
+        </div>
+      </div>
+
+      <div className="aurora-controls mt-3">
+        <AuroraButton onClick={start} glow>
+          <FaPlay className="aurora-btn__icon" />
+          <span className="m-1">Begin</span>
+        </AuroraButton>
+
+        <AuroraButton onClick={stop} danger>
+          <FaStop className="aurora-btn__icon" />
+          <span className="m-1">End</span>
+        </AuroraButton>
+      </div>
+
+   
+      <RealTimeEmotionCamera
+        ref={cameraRef}
+        onEmotion={setEmotion}
+        onStateChange={setState}
+        audioRef={audioRef}
+      />
     </div>
   );
 }
 
+
+function AuroraButton({
+  children,
+  onClick,
+  glow,
+  danger,
+}: {
+  children: React.ReactNode;
+  onClick: () => void;
+  glow?: boolean;
+  danger?: boolean;
+}) {
+  return (
+    <motion.button
+      type="button"
+      onClick={onClick}
+      whileHover={{ scale: 1.03 }}
+      whileTap={{ scale: 0.95 }}
+      className={[
+        "aurora-btn",
+        glow ? "aurora-btn--glow" : "",
+        danger ? "aurora-btn--danger" : "",
+      ].join(" ")}
+    >
+      {children}
+    </motion.button>
+  );
+}
 
 
 */}

@@ -1,11 +1,9 @@
 # backend/services/aurora_speech.py
-
 import os
 import requests
 
 ELEVEN_KEY = os.getenv("ELEVENLABS_API_KEY")
 VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID")
-
 
 class SpeechServiceError(Exception):
     pass

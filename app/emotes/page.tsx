@@ -4,7 +4,9 @@
 import Nav from "@/components/nav/Nav";
 import AuroraPresence from "@/components/avatar/AuroraPresence";
 
+
 export default function Emotes() {
+ 
   return (
     <>
      <Nav />
@@ -18,7 +20,8 @@ export default function Emotes() {
         }}
       >
         <div >
-          <AuroraPresence />
+        < AuroraPresence />
+         
         </div>
       </main>
     </>

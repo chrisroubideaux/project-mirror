@@ -1,6 +1,4 @@
 # backend/routes/whisper_routes.py
-
-
 import io
 from flask import Blueprint, request, jsonify
 from services.aurora_whisper import speech_to_text
