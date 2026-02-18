@@ -29,6 +29,8 @@ from aurora.models_relationship import AuroraRelationship
 from aurora.models_messages import AuroraMessage
 from aurora.models_emotion import AuroraEmotion
 from aurora.models_session_summary import AuroraSessionSummary
+from aurora.models_memory import AuroraUserMemory
+
 
 # ----------------------------------------------------
 # Blueprints
