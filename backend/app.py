@@ -30,6 +30,7 @@ from aurora.models_messages import AuroraMessage
 from aurora.models_emotion import AuroraEmotion
 from aurora.models_session_summary import AuroraSessionSummary
 from aurora.models_memory import AuroraUserMemory
+from aurora.models_personality import AuroraPersonality
 
 
 # ----------------------------------------------------
