@@ -1,15 +1,16 @@
-# backend/admin/models.py
+# backend/admin/routes.py
 
 from flask import Blueprint, request, jsonify
 from werkzeug.security import generate_password_hash, check_password_hash
 from uuid import uuid4
-
 from flask_jwt_extended import create_access_token
-
 from extensions import db
 from .models import Admin
 from users.models import User
 from .decorators import admin_token_required
+# from admin.analytics.aurora_analytics import compute_aurora_overview
+
+from admin.analytics.aurora_analytics import compute_user_aurora_snapshot, compute_aurora_overview
 
 admin_bp = Blueprint("admins", __name__, url_prefix="/api/admins")
 
@@ -306,9 +307,38 @@ def delete_any_user(current_admin, user_id):
 
 
 # -------------------------
+# AURORA ANALYTICS OVERVIEW
+# -------------------------
+@admin_bp.route("/analytics/aurora/overview", methods=["GET"])
+@admin_token_required
+def aurora_overview(current_admin):
+
+    data = compute_aurora_overview()
+
+    return jsonify({
+        "analytics": data
+    }), 200
+
+
+
+# -------------------------
 # LOGOUT admin
 # -------------------------
 @admin_bp.route("/logout", methods=["POST"])
 @admin_token_required
 def logout_admin(current_admin):
     return jsonify({"message": "Admin logged out successfully"}), 200
+
+
+# -------------------------
+# AURORA USER SNAPSHOT
+# -------------------------
+@admin_bp.route("/analytics/aurora/user/<string:user_id>", methods=["GET"])
+@admin_token_required
+def aurora_user_snapshot(current_admin, user_id):
+
+    data = compute_user_aurora_snapshot(user_id)
+
+    return jsonify({
+        "aurora_user_snapshot": data
+    }), 200
