@@ -444,6 +444,44 @@
   }
 }
 
+/* ===========================
+   Aurora Admin Cards
+=========================== */
+
+.aurora-card {
+  background-color: var(--card-bg) !important;
+  color: var(--foreground) !important;
+  border: 1px solid var(--aurora-bento-border);
+  border-radius: 16px;
+  backdrop-filter: blur(18px);
+  transition: all 0.25s ease;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+}
+
+/* Light mode fallback (optional safety) */
+:root {
+  --card-bg: #ffffff;
+  --foreground: #111111;
+}
+
+/* Dark mode override */
+[data-theme='dark'],
+.dark-mode,
+html.dark,
+body.dark {
+  --card-bg: #14171c;
+  --foreground: #f1f1f1;
+}
+
+/* Hover glow */
+.aurora-card:hover {
+  box-shadow: 0 0 25px rgba(120, 160, 255, 0.15);
+}
+
+/* Fix Bootstrap card override */
+.card.aurora-card {
+  background-color: var(--card-bg) !important;
+}
 
 /* ============================= */
 /* MOBILE RESPONSIVENESS         */

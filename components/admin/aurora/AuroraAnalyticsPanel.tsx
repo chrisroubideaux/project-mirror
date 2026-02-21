@@ -10,16 +10,12 @@ import AuroraTrustEngagementChart from './AuroraTrustEngagementChart';
 import AuroraMemoryChart from './AuroraMemoryChart';
 import AuroraEmotionChart from './AuroraEmotionChart';
 
-type Overview = {
-  total_sessions: number;
-  total_users: number;
-  avg_engagement: number;
-  risk_flag_rate: number;
-  emotion_distribution?: Record<string, number>;
-  top_themes?: [string, number][];
+type Overview = any;
+type User = {
+  id: string;
+  email: string;
+  full_name?: string;
 };
-
-type UserSnapshot = any;
 
 export default function AuroraAnalyticsPanel({
   token,
@@ -27,66 +23,55 @@ export default function AuroraAnalyticsPanel({
   token: string;
 }) {
   const [overview, setOverview] = useState<Overview | null>(null);
-  const [snapshot, setSnapshot] = useState<UserSnapshot | null>(null);
-  const [selectedUser, setSelectedUser] = useState('');
+  const [users, setUsers] = useState<User[]>([]);
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [snapshot, setSnapshot] = useState<any>(null);
   const [loading, setLoading] = useState(false);
 
-  /* ========================================
-     Fetch Global Overview
-  ======================================== */
+  /* ===============================
+     INITIAL LOAD
+  =============================== */
   useEffect(() => {
     if (!token) return;
     fetchOverview();
+    fetchUsers();
   }, [token]);
 
   async function fetchOverview() {
-    try {
-      const res = await axios.get(
-        'http://localhost:5000/api/admins/analytics/aurora/overview',
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
-
-      setOverview(res.data.analytics);
-    } catch (err) {
-      console.error('Failed to load Aurora overview:', err);
-    }
+    const res = await axios.get(
+      'http://localhost:5000/api/admins/analytics/aurora/overview',
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    setOverview(res.data.analytics);
   }
 
-  /* ========================================
-     Fetch User Snapshot
-  ======================================== */
-  async function fetchUserSnapshot(userId: string) {
-    if (!userId || !token) return;
-
-    try {
-      setLoading(true);
-
-      const res = await axios.get(
-        `http://localhost:5000/api/admins/analytics/aurora/user/${userId}`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
-
-      setSnapshot(res.data.aurora_user_snapshot);
-    } catch (err) {
-      console.error('Failed to load user snapshot:', err);
-    } finally {
-      setLoading(false);
-    }
+  async function fetchUsers() {
+    const res = await axios.get(
+      'http://localhost:5000/api/admins/users?limit=50',
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    setUsers(res.data);
   }
 
-  /* ========================================
+  async function fetchSnapshot(userId: string) {
+    setLoading(true);
+    const res = await axios.get(
+      `http://localhost:5000/api/admins/analytics/aurora/user/${userId}`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    setSnapshot(res.data.aurora_user_snapshot);
+    setLoading(false);
+  }
+
+  /* ===============================
      UI
-  ======================================== */
+  =============================== */
   return (
     <div className="container-fluid p-4">
       <h4 className="mb-4 fw-light">🧠 Aurora Intelligence Console</h4>
 
-      {/* ================= GLOBAL OVERVIEW ================= */}
-      {overview && (
+      {/* ================= OVERVIEW ================= */}
+      {overview && !selectedUserId && (
         <div className="card aurora-card mb-4 p-4">
           <h5 className="mb-3">Global Overview</h5>
 
@@ -111,47 +96,38 @@ export default function AuroraAnalyticsPanel({
               <div className="fs-5">{overview.risk_flag_rate}</div>
             </div>
           </div>
-
-          {/* Optional: Top Themes */}
-          {overview.top_themes && (
-            <div className="mt-3">
-              <div className="small text-muted mb-1">Top Themes</div>
-              <div className="d-flex flex-wrap gap-2">
-                {overview.top_themes.slice(0, 5).map(([theme, count]) => (
-                  <span
-                    key={theme}
-                    className="badge bg-secondary-subtle text-secondary-emphasis"
-                  >
-                    {theme} ({count})
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
       )}
 
-      {/* ================= USER LOOKUP ================= */}
-      <div className="card aurora-card mb-4 p-4">
-        <h5 className="mb-3">User Snapshot</h5>
+      {/* ================= USER LIST ================= */}
+      {!selectedUserId && (
+        <div className="card aurora-card p-4">
+          <h5 className="mb-3">Users</h5>
 
-        <div className="input-group">
-          <input
-            type="text"
-            className="form-control"
-            placeholder="Enter user UUID..."
-            value={selectedUser}
-            onChange={(e) => setSelectedUser(e.target.value)}
-          />
-
-          <button
-            className="btn btn-primary"
-            onClick={() => fetchUserSnapshot(selectedUser)}
-          >
-            Load
-          </button>
+          <div className="list-group">
+            {users.map((user) => (
+              <button
+                key={user.id}
+                className="list-group-item list-group-item-action d-flex justify-content-between align-items-center"
+                onClick={() => {
+                  setSelectedUserId(user.id);
+                  fetchSnapshot(user.id);
+                }}
+              >
+                <div>
+                  <div className="fw-light">
+                    {user.full_name || 'Unnamed User'}
+                  </div>
+                  <div className="small text-muted">{user.email}</div>
+                </div>
+                <span className="badge bg-primary-subtle text-primary">
+                  View
+                </span>
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* ================= LOADING ================= */}
       {loading && (
@@ -160,9 +136,21 @@ export default function AuroraAnalyticsPanel({
         </div>
       )}
 
-      {/* ================= USER SNAPSHOT ================= */}
-      {snapshot && (
+      {/* ================= SNAPSHOT ================= */}
+      {snapshot && selectedUserId && (
         <>
+          <div className="mb-3">
+            <button
+              className="btn btn-outline-secondary btn-sm"
+              onClick={() => {
+                setSelectedUserId(null);
+                setSnapshot(null);
+              }}
+            >
+              ← Back to Overview
+            </button>
+          </div>
+
           <AuroraUserInfoCard snapshot={snapshot} />
           <AuroraPersonalityCard snapshot={snapshot} />
           <AuroraTrustEngagementChart snapshot={snapshot} />
