@@ -25,7 +25,9 @@ export type AdminSidebarTab =
   | 'alerts'
   | 'upload'
   | 'videos'
-  | 'charts';
+  | 'charts'
+  | 'aurora';
+  
 
 type AdminSidebarProps = {
   adminId: string;
@@ -84,6 +86,12 @@ export default function AdminSidebar({
       icon: <FaChartBar />,
       aria: 'Analytics Charts',
     },
+    {
+      tab: 'aurora',
+      label: 'Aurora',
+      icon: <FaUserShield />,   // or FaBrain if you prefer
+      aria: 'Aurora Analytics',
+   },
   ];
 
   return (

@@ -12,6 +12,7 @@ import VideosTab from '@/components/admin/videos/VideosTab';
 import StatCards from '@/components/admin/stats/StatCards';
 import RecentActivity from '@/components/admin/stats/RecentActivity';
 import ChartsPanel from '@/components/admin/stats/ChartsPanel';
+import AuroraAnalyticsPanel from '@/components/admin/aurora/AuroraAnalyticsPanel';
 
 /* --------------------------------------------------
    Config
@@ -37,7 +38,8 @@ export type AdminSidebarTab =
   | 'alerts'
   | 'upload'
   | 'videos'
-  | 'charts';
+  | 'charts'
+  | 'aurora';
 
 /* --------------------------------------------------
    Page
@@ -180,6 +182,12 @@ export default function AdminPage() {
                 {activeTab === 'alerts' && (
                   <AlertsTab />
                 )}
+
+                {activeTab === 'aurora' && (
+                  <AuroraAnalyticsPanel
+                    token={localStorage.getItem(ADMIN_TOKEN_KEY) || ''}
+                  />
+           )}
 
               </motion.div>
             </AnimatePresence>
