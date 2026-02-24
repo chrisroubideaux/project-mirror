@@ -1,284 +1,291 @@
 // components/nav/Nav.tsx
-// components/nav/Nav.tsx
 'use client';
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { motion } from 'framer-motion';
-import { useAppDispatch, useAppSelector } from '@/store/hooks';
-import { toggleMobileMenu, closeMobileMenu } from '@/store/features/uiSlice';
+import { motion, AnimatePresence } from 'framer-motion';
+import { useAppSelector } from '@/store/hooks';
 import ThemeToggleButton from '@/components/ThemeToggleButton';
-import { FaBars, FaTimes } from 'react-icons/fa';
-import { useEffect, useState } from 'react';
-
-// 3D Logo
+import {
+  FaBars,
+  FaTimes,
+  FaHome,
+  FaInfoCircle,
+  FaSignInAlt,
+} from 'react-icons/fa';
+import { useState } from 'react';
 import AuroraLogo3D from '@/components/nav/AuroraLogo3D';
 
-export default function Navbar() {
-  const dispatch = useAppDispatch();
-  const mobileMenuOpen = useAppSelector((state) => state.ui.mobileMenuOpen);
-  const mode = useAppSelector((state) => state.theme.mode);
+export default function Nav() {
   const pathname = usePathname();
+  const mode = useAppSelector((state) => state.theme.mode);
   const isDark = mode === 'dark';
 
-  const [shrink, setShrink] = useState(false);
-
-  // Scroll shrink
-  useEffect(() => {
-    const handleScroll = () => setShrink(window.scrollY > 10);
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
+  const [collapsed, setCollapsed] = useState(true);
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   const links = [
-    { label: 'Home', href: '/' },
-    { label: 'About', href: '/about' },
+    { label: 'Home', href: '/', icon: <FaHome /> },
+    { label: 'About', href: '/about', icon: <FaInfoCircle /> },
   ];
 
   return (
     <>
-      {/* OUTER glow */}
-      <motion.div
-        whileHover={{
-          boxShadow: isDark
-            ? "0 0 28px rgba(0,140,255,0.35)"
-            : "0 0 22px rgba(59,130,246,0.30)",
+      {/* =========================
+         DESKTOP SIDEBAR
+      ========================== */}
+      <motion.aside
+        className="d-none d-sm-flex"
+        animate={{ width: collapsed ? 80 : 220 }}
+        transition={{ duration: 0.3 }}
+        style={{
+          height: '100vh',
+          position: 'fixed',
+          left: 0,
+          top: 0,
+          zIndex: 2000,
+          backdropFilter: 'blur(18px)',
+          background: isDark
+            ? 'rgba(15,15,25,0.75)'
+            : 'rgba(255,255,255,0.75)',
+          borderRight: isDark
+            ? '1px solid rgba(255,255,255,0.08)'
+            : '1px solid rgba(0,0,0,0.08)',
+          flexDirection: 'column',
+          justifyContent: 'space-between',
+          padding: '1rem 0.5rem',
         }}
-        transition={{ duration: 0.4 }}
-        style={{ width: "100%", position: "sticky", top: 0, zIndex: 2000 }}
       >
+        {/* TOP SECTION */}
+        <div>
+          {/* Collapse Button */}
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: collapsed ? 'center' : 'flex-end',
+              marginBottom: 20,
+            }}
+          >
+            <FaBars
+              size={18}
+              style={{ cursor: 'pointer' }}
+              onClick={() => setCollapsed(!collapsed)}
+            />
+          </div>
 
-        {/* NAVBAR */}
-        <motion.nav
-          className="navbar navbar-expand-sm px-3 w-100"
-          animate={{
-            paddingTop: shrink ? "4px" : "14px",
-            paddingBottom: shrink ? "4px" : "14px",
-            backdropFilter: "blur(16px)",
-          }}
-          transition={{ duration: 0.35, ease: "easeOut" }}
+          {/* Logo */}
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'center',
+              marginBottom: 30,
+            }}
+          >
+            <AuroraLogo3D />
+          </div>
+
+          {/* Links */}
+          <nav style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+            {links.map(({ label, href, icon }) => {
+              const active = pathname === href;
+
+              return (
+                <Link key={href} href={href} style={{ textDecoration: 'none' }}>
+                  <motion.div
+                    whileHover={{ scale: 1.05 }}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 16,
+                      padding: '10px 12px',
+                      borderRadius: 12,
+                      justifyContent: collapsed ? 'center' : 'flex-start',
+                      background: active
+                        ? isDark
+                          ? 'rgba(0,140,255,0.25)'
+                          : 'rgba(59,130,246,0.15)'
+                        : 'transparent',
+                      color: isDark ? '#eee' : '#333',
+                      transition: 'all .2s ease',
+                    }}
+                  >
+                    {icon}
+                    {!collapsed && <span>{label}</span>}
+                  </motion.div>
+                </Link>
+              );
+            })}
+
+            {/* Login */}
+            <Link href="/login" style={{ textDecoration: 'none' }}>
+              <motion.div
+                whileHover={{ scale: 1.05 }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 16,
+                  padding: '10px 12px',
+                  borderRadius: 12,
+                  justifyContent: collapsed ? 'center' : 'flex-start',
+                  color: isDark ? '#9aeaff' : '#2563eb',
+                }}
+              >
+                <FaSignInAlt />
+                {!collapsed && <span>Login</span>}
+              </motion.div>
+            </Link>
+          </nav>
+        </div>
+
+        {/* Bottom */}
+        <div style={{ display: 'flex', justifyContent: 'center' }}>
+          <ThemeToggleButton />
+        </div>
+      </motion.aside>
+
+      {/* =========================
+         MOBILE TOP BAR
+         [                          ☰ ]
+      ========================== */}
+      <div
+        className="d-flex d-sm-none align-items-center justify-content-end px-3"
+        style={{
+          height: 60,
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100%',
+          zIndex: 3000,
+          backdropFilter: 'blur(18px)',
+          background: isDark
+            ? 'rgba(15,15,25,0.92)'
+            : 'rgba(255,255,255,0.92)',
+          borderBottom: isDark
+            ? '1px solid rgba(255,255,255,0.08)'
+            : '1px solid rgba(0,0,0,0.08)',
+        }}
+      >
+        <FaBars
+          size={22}
           style={{
-            borderBottom: isDark
-              ? "1px solid rgba(255,255,255,0.12)"
-              : "1px solid rgba(0,0,0,0.06)",
-            background: isDark
-              ? "rgba(15,15,25,0.55)"
-              : "rgba(255,255,255,0.55)",
-            boxShadow: isDark
-              ? "0 0 22px rgba(0,140,255,0.28)"
-              : "0 4px 18px rgba(0,0,0,0.10)",
-            transition: "all .3s ease",
-            position: "relative",
+            cursor: 'pointer',
+            color: isDark ? '#fff' : '#111',
           }}
-        >
-          <div className="container-fluid d-flex justify-content-between align-items-center">
+          onClick={() => setMobileOpen(true)}
+        />
+      </div>
 
-            {/* BRAND */}
-            <Link
-              href="/"
-              onClick={() => dispatch(closeMobileMenu())}
-              className="navbar-brand p-0 d-flex align-items-center gap-2"
-              style={{ textDecoration: "none" }}
+      {/* =========================
+         MOBILE DRAWER
+      ========================== */}
+      <AnimatePresence>
+        {mobileOpen && (
+          <>
+            {/* Overlay */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 0.4 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              onClick={() => setMobileOpen(false)}
+              style={{
+                position: 'fixed',
+                inset: 0,
+                background: '#000',
+                zIndex: 3500,
+              }}
+            />
+
+            {/* Drawer */}
+            <motion.div
+              initial={{ x: -260 }}
+              animate={{ x: 0 }}
+              exit={{ x: -260 }}
+              transition={{ duration: 0.3 }}
+              style={{
+                position: 'fixed',
+                top: 0,
+                left: 0,
+                height: '100vh',
+                width: 260,
+                zIndex: 4000,
+                backdropFilter: 'blur(18px)',
+                background: isDark
+                  ? 'rgba(15,15,25,0.97)'
+                  : 'rgba(255,255,255,0.97)',
+                padding: '2rem 1.5rem',
+                display: 'flex',
+                flexDirection: 'column',
+              }}
             >
+              {/* Drawer Header */}
               <div
                 style={{
-                  transform: shrink ? "scale(0.80)" : "scale(1)",
-                  transition: "0.35s ease",
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  marginBottom: 30,
                 }}
               >
                 <AuroraLogo3D />
+
+                <FaTimes
+                  size={20}
+                  style={{ cursor: 'pointer' }}
+                  onClick={() => setMobileOpen(false)}
+                />
               </div>
-            </Link>
 
-            {/* DESKTOP LINKS */}
-            <ul className="navbar-nav d-none d-sm-flex flex-row gap-4 align-items-center mb-0">
-              {links.map(({ label, href }) => {
-                const active = pathname === href;
-                return (
-                  <motion.li
+              <div style={{ marginBottom: 30 }}>
+                <ThemeToggleButton />
+              </div>
+
+              {/* Links */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+                {links.map(({ label, href, icon }) => (
+                  <Link
                     key={href}
-                    className="position-relative"
-                    whileHover={{ scale: 1.07 }}
+                    href={href}
+                    onClick={() => setMobileOpen(false)}
+                    style={{ textDecoration: 'none' }}
                   >
-                    <Link
-                      href={href}
-                      className="nav-link fw-semibold"
-                      style={{ color: isDark ? "#eee" : "#333" }}
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 12,
+                        color: isDark ? '#eee' : '#333',
+                      }}
                     >
-                      {label}
+                      {icon} {label}
+                    </div>
+                  </Link>
+                ))}
 
-                      {/* hover ripple */}
-                      <motion.span
-                        className="position-absolute top-50 start-50 translate-middle"
-                        initial={{ opacity: 0, scale: 0.4 }}
-                        whileHover={{ opacity: 0.4, scale: 1.7 }}
-                        transition={{ duration: 0.4 }}
-                        style={{
-                          width: "100%",
-                          height: "100%",
-                          borderRadius: "50%",
-                          background: isDark
-                            ? "radial-gradient(circle, rgba(100,200,255,0.25), transparent 70%)"
-                            : "radial-gradient(circle, rgba(120,150,255,0.25), transparent 70%)",
-                          pointerEvents: "none",
-                          zIndex: -1,
-                        }}
-                      />
-
-                      {/* active underline */}
-                      {active && (
-                        <motion.div
-                          layoutId="active-underline"
-                          className="position-absolute start-0 bottom-0"
-                          style={{
-                            height: "2px",
-                            width: "100%",
-                            background: isDark
-                              ? "linear-gradient(90deg, #00b7ff, #a855f7, #00ffc8)"
-                              : "linear-gradient(90deg, #3b82f6, #9333ea, #10b981)",
-                            borderRadius: "2px",
-                          }}
-                        />
-                      )}
-                    </Link>
-                  </motion.li>
-                );
-              })}
-
-              {/* CLEAN LOGIN — no border, no outline */}
-              <motion.li whileHover={{ scale: 1.1 }}>
                 <Link
                   href="/login"
-                  className="fw-semibold"
-                  style={{
-                    padding: "6px 12px",
-                    borderRadius: "999px",
-                    textDecoration: "none",
-                    color: isDark ? "#9aeaff" : "#2563eb",
-                    fontSize: "1rem",
-                    background: "transparent",
-                    border: "none",
-                    boxShadow: "none",
-                  }}
+                  onClick={() => setMobileOpen(false)}
+                  style={{ textDecoration: 'none' }}
                 >
-                  Login
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 12,
+                      color: isDark ? '#9aeaff' : '#2563eb',
+                    }}
+                  >
+                    <FaSignInAlt /> Login
+                  </div>
                 </Link>
-              </motion.li>
-
-              {/* THEME TOGGLE — border removed */}
-              <li>
-                <div
-                  style={{
-                    background: "transparent",
-                    border: "none",
-                    boxShadow: "none",
-                    padding: "4px",
-                  }}
-                >
-                  <ThemeToggleButton className="btn-sm" />
-                </div>
-              </li>
-            </ul>
-
-            {/* MOBILE MENU BUTTON */}
-            <button
-              className="navbar-toggler border-0 d-sm-none"
-              onClick={() => dispatch(toggleMobileMenu())}
-            >
-              {mobileMenuOpen ? (
-                <FaTimes size={22} className="text-light" />
-              ) : (
-                <FaBars size={22} className="text-light" />
-              )}
-            </button>
-          </div>
-
-          {/* LOADING BAR */}
-          <motion.div
-            layoutId="loading-bar"
-            className="position-absolute bottom-0 start-0"
-            style={{
-              width: "100%",
-              height: "3px",
-              background: isDark
-                ? "linear-gradient(90deg, #00b7ff, #a855f7, #00ffc8)"
-                : "linear-gradient(90deg, #2563eb, #9333ea, #10b981)",
-            }}
-          />
-        </motion.nav>
-      </motion.div>
-
-      {/* MOBILE MENU */}
-      {mobileMenuOpen && (
-        <motion.div
-          initial={{ opacity: 0, y: -12 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -12 }}
-          className="d-sm-none w-100 text-center py-4"
-          style={{
-            background: isDark
-              ? "rgba(20,20,30,0.9)"
-              : "rgba(255,255,255,0.90)",
-            backdropFilter: "blur(12px)",
-            borderBottom: isDark
-              ? "1px solid rgba(255,255,255,0.08)"
-              : "1px solid rgba(0,0,0,0.12)",
-          }}
-        >
-          <ul className="navbar-nav flex-column gap-3">
-            {links.map(({ label, href }) => (
-              <motion.li key={href} whileTap={{ scale: 0.97 }}>
-                <Link
-                  href={href}
-                  className="fw-semibold"
-                  onClick={() => dispatch(closeMobileMenu())}
-                  style={{
-                    color: isDark ? "#f1f5f9" : "#1e293b",
-                    fontSize: "1.1rem",
-                  }}
-                >
-                  {label}
-                </Link>
-              </motion.li>
-            ))}
-
-            {/* MOBILE LOGIN */}
-            <motion.li whileTap={{ scale: 0.97 }}>
-              <Link
-                href="/login"
-                onClick={() => dispatch(closeMobileMenu())}
-                className="btn btn-primary rounded-pill px-4 fw-semibold mt-2"
-                style={{
-                  background: isDark
-                    ? "linear-gradient(135deg, #00b7ff, #a855f7)"
-                    : "linear-gradient(135deg, #2563eb, #7c3aed)",
-                  border: "none",
-                }}
-              >
-                Login
-              </Link>
-            </motion.li>
-
-            <li className="mt-3">
-              <div
-                style={{
-                  background: "transparent",
-                  border: "none",
-                  boxShadow: "none",
-                  padding: "4px",
-                }}
-              >
-                <ThemeToggleButton className="btn-sm" />
               </div>
-            </li>
-         
-          </ul>
-        </motion.div>
-      )}
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </>
   );
 }
-
 
 
 {/*
@@ -289,245 +296,270 @@ export default function Navbar() {
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useAppDispatch, useAppSelector } from '@/store/hooks';
-import { toggleMobileMenu, closeMobileMenu } from '@/store/features/uiSlice';
+import { useAppSelector } from '@/store/hooks';
 import ThemeToggleButton from '@/components/ThemeToggleButton';
-import { FaBars, FaTimes, FaBell } from 'react-icons/fa';
-import { useEffect, useState } from 'react';
+import {
+  FaBars,
+  FaTimes,
+  FaHome,
+  FaInfoCircle,
+  FaSignInAlt,
+} from 'react-icons/fa';
+import { useState } from 'react';
 import AuroraLogo3D from '@/components/nav/AuroraLogo3D';
 
-
-
-
-export default function Navbar() {
-  const dispatch = useAppDispatch();
-  const mobileMenuOpen = useAppSelector((state) => state.ui.mobileMenuOpen);
-  const mode = useAppSelector((state) => state.theme.mode);
+export default function Nav() {
   const pathname = usePathname();
+  const mode = useAppSelector((state) => state.theme.mode);
   const isDark = mode === 'dark';
 
-  const [shrink, setShrink] = useState(false);
-
-  // SCROLL SHRINK
-  useEffect(() => {
-    const handleScroll = () => setShrink(window.scrollY > 10);
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
+  const [collapsed, setCollapsed] = useState(true);
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   const links = [
-    { label: 'Home', href: '/' },
-    { label: 'About', href: '/about' },
-    { label: 'Contact', href: '/contact' }
+    { label: 'Home', href: '/', icon: <FaHome /> },
+    { label: 'About', href: '/about', icon: <FaInfoCircle /> },
   ];
 
   return (
     <>
-    
-      <motion.div
-        whileHover={{ boxShadow: isDark 
-          ? "0 0 28px rgba(0,140,255,0.35)" 
-          : "0 0 22px rgba(59,130,246,0.30)" }}
-        transition={{ duration: 0.4 }}
-        style={{ width: '100%', position: 'sticky', top: 0, zIndex: 2000 }}
+     
+      <motion.aside
+        className="d-none d-sm-flex"
+        animate={{ width: collapsed ? 80 : 220 }}
+        transition={{ duration: 0.3 }}
+        style={{
+          height: '100vh',
+          position: 'fixed',
+          left: 0,
+          top: 0,
+          zIndex: 2000,
+          backdropFilter: 'blur(18px)',
+          background: isDark
+            ? 'rgba(15,15,25,0.75)'
+            : 'rgba(255,255,255,0.75)',
+          borderRight: isDark
+            ? '1px solid rgba(255,255,255,0.08)'
+            : '1px solid rgba(0,0,0,0.08)',
+          flexDirection: 'column',
+          justifyContent: 'space-between',
+          padding: '1rem 0.5rem',
+        }}
       >
-
        
-        <motion.nav
-          className="navbar navbar-expand-sm px-3 w-100"
-          animate={{
-            paddingTop: shrink ? "4px" : "14px",
-            paddingBottom: shrink ? "4px" : "14px",
-            backdropFilter: "blur(16px)"
-          }}
-          transition={{ duration: 0.35, ease: "easeOut" }}
-          style={{
-            borderBottom: isDark
-              ? '1px solid rgba(255,255,255,0.12)'
-              : '1px solid rgba(0,0,0,0.06)',
-            background: isDark
-              ? 'rgba(15,15,25,0.55)'
-              : 'rgba(255,255,255,0.55)',
-            boxShadow: isDark
-              ? '0 0 22px rgba(0,140,255,0.28)'
-              : '0 4px 18px rgba(0,0,0,0.10)',
-            transition: 'all .3s ease',
-            position: 'relative'
-          }}
-        >
-          <div className="container-fluid d-flex justify-content-between align-items-center">
-            
-          
-            <Link
-  href="/"
-  onClick={() => dispatch(closeMobileMenu())}
-  className="navbar-brand fw-bold p-0"
-  style={{
-    fontSize: shrink ? "1.25rem" : "1.45rem",
-    background: isDark
-      ? 'linear-gradient(135deg, #00b7ff, #a855f7, #00ffc8)'
-      : 'linear-gradient(135deg, #2563eb, #7c3aed, #059669)',
-    WebkitBackgroundClip: 'text',
-    WebkitTextFillColor: 'transparent'
-  }}
->
-  Project-Mirror
-</Link>
-
-
-            
-            <ul className="navbar-nav d-none d-sm-flex flex-row gap-4 align-items-center mb-0">
-
-              {links.map(({ label, href }) => {
-                const active = pathname === href;
-
-                return (
-                  <motion.li
-                    key={href}
-                    className="position-relative"
-                    whileHover={{ scale: 1.07 }}
-                    whileTap={{ scale: 0.95 }}
-                  >
-                    <Link
-                      href={href}
-                      className="nav-link fw-semibold"
-                      style={{ color: isDark ? '#eee' : '#333' }}
-                    >
-                      {label}
-
-                     
-                      <motion.span
-                        className="position-absolute top-50 start-50 translate-middle"
-                        initial={{ opacity: 0, scale: 0.4 }}
-                        whileHover={{ opacity: 0.4, scale: 1.7 }}
-                        transition={{ duration: 0.4 }}
-                        style={{
-                          width: '100%',
-                          height: '100%',
-                          borderRadius: '50%',
-                          background: isDark
-                            ? 'radial-gradient(circle, rgba(100,200,255,0.25), transparent 70%)'
-                            : 'radial-gradient(circle, rgba(120,150,255,0.25), transparent 70%)',
-                          pointerEvents: 'none',
-                          zIndex: -1
-                        }}
-                      />
-
-                 
-                      {active && (
-                        <motion.div
-                          layoutId="active-underline"
-                          className="position-absolute start-0 bottom-0"
-                          style={{
-                            height: '2px',
-                            width: '100%',
-                            background: isDark
-                              ? 'linear-gradient(90deg, #00b7ff, #a855f7, #00ffc8)'
-                              : 'linear-gradient(90deg, #3b82f6, #9333ea, #10b981)',
-                            borderRadius: '2px'
-                          }}
-                        />
-                      )}
-                    </Link>
-                  </motion.li>
-                );
-              })}
-
-             
-              <motion.li 
-                whileHover={{ scale: 1.15 }} 
-                className="position-relative"
-              >
-                <FaBell size={20} style={{ color: isDark ? '#eee' : '#333' }} />
-
-              
-                <span
-                  className="position-absolute top-0 end-0"
-                  style={{
-                    width: '8px',
-                    height: '8px',
-                    background: isDark ? '#ff4d6d' : '#dc2626',
-                    borderRadius: '50%',
-                    animation: 'pulseDot 1.5s infinite ease-in-out'
-                  }}
-                />
-              </motion.li>
-
-             
-              <motion.li whileHover={{ scale: 1.05 }} className="dropdown">
-                <button className="btn border-0 dropdown-toggle p-0">
-                  <img
-                    src="/default-avatar.png"
-                    alt="avatar"
-                    style={{
-                      width: '36px',
-                      height: '36px',
-                      borderRadius: '50%',
-                      border: isDark
-                        ? '2px solid rgba(0,140,255,0.6)'
-                        : '2px solid rgba(0,0,0,0.1)'
-                    }}
-                  />
-                </button>
-                <ul
-                  className="dropdown-menu dropdown-menu-end shadow"
-                  style={{
-                    background: isDark
-                      ? 'rgba(20,20,30,0.9)'
-                      : 'rgba(255,255,255,0.9)',
-                    backdropFilter: 'blur(10px)'
-                  }}
-                >
-                  <li><Link href="/profile" className="dropdown-item">Profile</Link></li>
-                  <li><Link href="/settings" className="dropdown-item">Settings</Link></li>
-                  <li><hr className="dropdown-divider" /></li>
-                  <li><Link href="/logout" className="dropdown-item">Logout</Link></li>
-                </ul>
-              </motion.li>
-
-            
-              <li><ThemeToggleButton className="btn-sm" /></li>
-
-            </ul>
-
-       
-            <button
-              className="navbar-toggler border-0 d-sm-none"
-              onClick={() => dispatch(toggleMobileMenu())}
-            >
-              {mobileMenuOpen ? (
-                <FaTimes size={22} className="text-light" />
-              ) : (
-                <FaBars size={22} className="text-light" />
-              )}
-            </button>
+        <div>
+         
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: collapsed ? 'center' : 'flex-end',
+              marginBottom: 20,
+            }}
+          >
+            <FaBars
+              size={18}
+              style={{ cursor: 'pointer' }}
+              onClick={() => setCollapsed(!collapsed)}
+            />
           </div>
 
-       
-          <motion.div
-            layoutId="loading-bar"
-            className="position-absolute bottom-0 start-0"
+          <div
             style={{
-              width: '100%',
-              height: '3px',
-              background: isDark
-                ? 'linear-gradient(90deg, #00b7ff, #a855f7, #00ffc8)'
-                : 'linear-gradient(90deg, #2563eb, #9333ea, #10b981)'
+              display: 'flex',
+              justifyContent: 'center',
+              marginBottom: 30,
             }}
-          />
-        </motion.nav>
-      </motion.div>
+          >
+            <AuroraLogo3D />
+          </div>
 
-      
-      <style>
-        {`
-        @keyframes pulseDot {
-          0% { transform: scale(1); opacity: .7; }
-          50% { transform: scale(1.5); opacity: 1; }
-          100% { transform: scale(1); opacity: .7; }
-        }
-      `}
-      </style>
+        
+          <nav style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+            {links.map(({ label, href, icon }) => {
+              const active = pathname === href;
+
+              return (
+                <Link
+                  key={href}
+                  href={href}
+                  style={{ textDecoration: 'none' }}
+                >
+                  <motion.div
+                    whileHover={{ scale: 1.05 }}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 16,
+                      padding: '10px 12px',
+                      borderRadius: 12,
+                      justifyContent: collapsed
+                        ? 'center'
+                        : 'flex-start',
+                      background: active
+                        ? isDark
+                          ? 'rgba(0,140,255,0.25)'
+                          : 'rgba(59,130,246,0.15)'
+                        : 'transparent',
+                      color: isDark ? '#eee' : '#333',
+                      transition: 'all .2s ease',
+                    }}
+                  >
+                    {icon}
+                    {!collapsed && <span>{label}</span>}
+                  </motion.div>
+                </Link>
+              );
+            })}
+
+            <Link href="/login" style={{ textDecoration: 'none' }}>
+              <motion.div
+                whileHover={{ scale: 1.05 }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 16,
+                  padding: '10px 12px',
+                  borderRadius: 12,
+                  justifyContent: collapsed
+                    ? 'center'
+                    : 'flex-start',
+                  color: isDark ? '#9aeaff' : '#2563eb',
+                }}
+              >
+                <FaSignInAlt />
+                {!collapsed && <span>Login</span>}
+              </motion.div>
+            </Link>
+          </nav>
+        </div>
+
+        <div style={{ display: 'flex', justifyContent: 'center' }}>
+          <ThemeToggleButton />
+        </div>
+      </motion.aside>
+
+      <div
+        className="d-flex d-sm-none justify-content-between align-items-center px-3"
+        style={{
+          height: 60,
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100%',
+          zIndex: 3000,
+          backdropFilter: 'blur(18px)',
+          background: isDark
+            ? 'rgba(15,15,25,0.85)'
+            : 'rgba(255,255,255,0.85)',
+          borderBottom: isDark
+            ? '1px solid rgba(255,255,255,0.08)'
+            : '1px solid rgba(0,0,0,0.08)',
+        }}
+      >
+        <FaBars
+          size={20}
+          style={{ cursor: 'pointer' }}
+          onClick={() => setMobileOpen(true)}
+        />
+
+        <AuroraLogo3D />
+
+        <ThemeToggleButton />
+      </div>
+
+      <AnimatePresence>
+        {mobileOpen && (
+          <>
+            
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 0.4 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              onClick={() => setMobileOpen(false)}
+              style={{
+                position: 'fixed',
+                inset: 0,
+                background: '#000',
+                zIndex: 3500,
+              }}
+            />
+
+           
+            <motion.div
+              initial={{ x: -250 }}
+              animate={{ x: 0 }}
+              exit={{ x: -250 }}
+              transition={{ duration: 0.3 }}
+              style={{
+                position: 'fixed',
+                top: 0,
+                left: 0,
+                height: '100vh',
+                width: 220,
+                zIndex: 4000,
+                backdropFilter: 'blur(18px)',
+                background: isDark
+                  ? 'rgba(15,15,25,0.95)'
+                  : 'rgba(255,255,255,0.95)',
+                padding: '2rem 1rem',
+                display: 'flex',
+                flexDirection: 'column',
+              }}
+            >
+             
+              <div
+                style={{
+                  marginBottom: 30,
+                  cursor: 'pointer',
+                }}
+                onClick={() => setMobileOpen(false)}
+              >
+                <FaTimes size={20} />
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+                {links.map(({ label, href, icon }) => (
+                  <Link
+                    key={href}
+                    href={href}
+                    onClick={() => setMobileOpen(false)}
+                    style={{ textDecoration: 'none' }}
+                  >
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 12,
+                        color: isDark ? '#eee' : '#333',
+                      }}
+                    >
+                      {icon} {label}
+                    </div>
+                  </Link>
+                ))}
+
+                <Link
+                  href="/login"
+                  onClick={() => setMobileOpen(false)}
+                  style={{ textDecoration: 'none' }}
+                >
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 12,
+                      color: isDark ? '#9aeaff' : '#2563eb',
+                    }}
+                  >
+                    <FaSignInAlt /> Login
+                  </div>
+                </Link>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </>
   );
 }

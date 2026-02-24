@@ -1,4 +1,145 @@
 // components/hero/AuroraHero.tsx
+"use client";
+
+import { useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import AuroraIntroPresence from "@/components/avatar/intro/AuroraIntroPresence";
+
+export default function AuroraHero() {
+  const [showIntro, setShowIntro] = useState(false);
+
+  return (
+    <>
+      <div
+        className="position-relative overflow-hidden d-flex align-items-center justify-content-center"
+        style={{
+          height: "70vh",
+          backdropFilter: "blur(12px)",
+        }}
+      >
+        {/* --- AURORA BACKGROUND SHIMMER --- */}
+        <motion.div
+          animate={{
+            backgroundPosition: ["0% 50%", "100% 50%", "0% 50%"],
+          }}
+          transition={{ duration: 12, repeat: Infinity, ease: "easeInOut" }}
+          style={{
+            position: "absolute",
+            inset: 0,
+            background:
+              "linear-gradient(135deg, rgba(0,180,255,0.45), rgba(160,70,255,0.45), rgba(0,255,200,0.35))",
+            backgroundSize: "200% 200%",
+            filter: "blur(80px)",
+            zIndex: -1,
+          }}
+        />
+
+        {/* --- CENTER CONTENT --- */}
+        <motion.div
+          initial={{ opacity: 0, y: 25 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 1 }}
+          className="text-center px-4"
+          style={{
+            maxWidth: "650px",
+            color: "var(--foreground)",
+          }}
+        >
+          <motion.h1
+            className="display-3 fw-bold mb-3 display-4"
+            style={{
+              background:
+                "linear-gradient(135deg, #00b7ff, #a855f7, #00ffc8)",
+              WebkitBackgroundClip: "text",
+              WebkitTextFillColor: "transparent",
+            }}
+          >
+            Project AURORA
+          </motion.h1>
+
+          <motion.p
+            className="lead mb-4 fs-4"
+            style={{ opacity: 0.85 }}
+          >
+            A next-generation Emotion Recognition & Empathy Engine —
+            fusing AI, machine learning, behavioral psychology, and multimodal deep learning into one intelligent emotional system.
+          </motion.p>
+
+          {/* BUTTONS */}
+          <div className="d-flex justify-content-center gap-3">
+            <button
+              onClick={() => setShowIntro(true)}
+              className="btn px-4 py-2 fw-semibold"
+              style={{
+                borderRadius: "14px",
+                background: "linear-gradient(135deg, #007bff, #6610f2)",
+                color: "white",
+                border: "none",
+                boxShadow: "0 0 15px rgba(0,123,255,0.3)",
+              }}
+            >
+              Meet Aurora
+            </button>
+
+            <a
+              href="/about"
+              className="btn btn-outline-light px-4 py-2 fw-semibold"
+              style={{ borderRadius: "14px" }}
+            >
+              Learn More
+            </a>
+          </div>
+        </motion.div>
+      </div>
+
+      {/* ============================= */}
+      {/* FULLSCREEN INTRO MODAL        */}
+      {/* ============================= */}
+
+      <AnimatePresence>
+        {showIntro && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.6 }}
+            style={{
+              position: "fixed",
+              inset: 0,
+              background: "black",
+              zIndex: 9999,
+            }}
+          >
+            {/* Close Button */}
+            <button
+              onClick={() => setShowIntro(false)}
+              style={{
+                position: "absolute",
+                top: 20,
+                right: 20,
+                zIndex: 10000,
+                background: "rgba(255,255,255,0.1)",
+                border: "1px solid rgba(255,255,255,0.2)",
+                borderRadius: "50%",
+                width: 42,
+                height: 42,
+                color: "white",
+                fontSize: "18px",
+                cursor: "pointer",
+              }}
+            >
+              ✕
+            </button>
+
+            <AuroraIntroPresence />
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </>
+  );
+}
+
+{/*
 'use client';
 
 import { motion } from "framer-motion";
@@ -13,7 +154,7 @@ export default function AuroraHero() {
       }}
     >
 
-      {/* --- AURORA BACKGROUND SHIMMER --- */}
+    
       <motion.div
         animate={{
           backgroundPosition: ["0% 50%", "100% 50%", "0% 50%"],
@@ -30,7 +171,7 @@ export default function AuroraHero() {
         }}
       />
 
-      {/* --- FLOATING SHAPES --- */}
+     
       <motion.div
         className="position-absolute rounded-circle"
         animate={{ y: [0, -25, 0], opacity: [0.6, 0.9, 0.6] }}
@@ -63,7 +204,7 @@ export default function AuroraHero() {
         }}
       />
 
-      {/* --- CENTER CONTENT --- */}
+     
       <motion.div
         initial={{ opacity: 0, y: 25 }}
         animate={{ opacity: 1, y: 0 }}
@@ -75,7 +216,7 @@ export default function AuroraHero() {
         }}
       >
 
-        {/* TITLE */}
+       
         <motion.h1
           initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
@@ -91,7 +232,7 @@ export default function AuroraHero() {
           Project AURORA
         </motion.h1>
 
-        {/* TAGLINE */}
+      
         <motion.p
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -105,7 +246,7 @@ export default function AuroraHero() {
          A next-generation Emotion Recognition & Empathy Engine — fusing AI, machine learning, behavioral psychology, and multimodal deep learning into one intelligent emotional system.
         </motion.p>
 
-        {/* BUTTONS */}
+     
         <motion.div
           className="d-flex justify-content-center gap-3"
           initial={{ opacity: 0, y: 15 }}
@@ -123,7 +264,7 @@ export default function AuroraHero() {
               boxShadow: "0 0 15px rgba(0,123,255,0.3)",
             }}
           >
-            Start Emotion Scan
+            Meet Auroa
           </a>
 
           <a
@@ -142,3 +283,5 @@ export default function AuroraHero() {
     </div>
   );
 }
+
+*/}

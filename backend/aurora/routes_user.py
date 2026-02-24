@@ -1,7 +1,5 @@
 # backend/aurora/routes_user.py
 
-# backend/aurora/routes_user.py
-
 import uuid
 from flask import Blueprint, request, jsonify
 from extensions import db

@@ -186,3 +186,28 @@ a {
   outline: 2px solid var(--accent);
   outline-offset: 4px;
 }
+
+
+/* =========================
+   APP LAYOUT
+========================= */
+
+.app-layout {
+  display: flex;
+}
+
+/* Desktop main content (sidebar = 80px collapsed) */
+.app-main {
+  margin-left: 80px;
+  width: 100%;
+  min-height: 100vh;
+  transition: margin-left 0.3s ease;
+}
+
+/* Mobile adjustments */
+@media (max-width: 576px) {
+  .app-main {
+    margin-left: 0;
+    margin-top: 60px; /* height of mobile top nav */
+  }
+}
