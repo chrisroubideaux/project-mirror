@@ -37,26 +37,27 @@ export default function Nav() {
       <motion.aside
         className="d-none d-sm-flex"
         style={{
-          width: 95, // fixed width (no expand anymore)
-          height: '100vh',
+          width: 95,
           position: 'fixed',
-          left: 12,
           top: 12,
+          bottom: 12,
+          left: 12,
+          height: 'calc(100vh - 24px)',
           zIndex: 2000,
           backdropFilter: 'blur(24px)',
           background: isDark
             ? 'rgba(15,15,25,0.75)'
             : 'rgba(255,255,255,0.75)',
           border: `1px solid ${borderColor}`,
-          borderRight: `1px solid ${borderColor}`,
           borderRadius: 13,
           flexDirection: 'column',
           justifyContent: 'space-between',
           padding: '1rem 0.6rem',
           overflow: 'hidden',
-          boxShadow: isDark
-            ? 'inset 0 0 40px rgba(0,0,0,0.6)'
-            : 'inset 0 0 25px rgba(0,0,0,0.08)',
+          boxShadow: `
+            inset 0 0 40px rgba(0,0,0,0.4),
+            0 0 12px ${neonColor}33
+          `,
         }}
       >
         {/* Floating Particles */}
@@ -207,7 +208,6 @@ export default function Nav() {
             : 'rgba(255,255,255,0.92)',
         }}
       >
-        {/* Hamburger ONLY in mobile */}
         <motion.div
           onClick={() => setMobileOpen(!mobileOpen)}
           animate={{ rotate: mobileOpen ? 90 : 0 }}

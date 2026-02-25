@@ -1,8 +1,10 @@
 // app/page.tsx
+
 'use client';
 
 import { useEffect, useState } from 'react';
 
+import Nav from '@/components/nav/Nav';
 import Footer from '@/components/nav/Footer';
 
 import VideoCard, { type PublicVideo } from '@/components/videos/VideoCard';
@@ -44,77 +46,84 @@ export default function Home() {
   }, []);
 
   return (
-    <>
-      {/* ================= HERO (FULL SCREEN UNDER SIDEBAR) ================= */}
-      <AuroraHero />
+    <div style={{ display: 'flex' }}>
+      {/* 🔥 PUBLIC SIDEBAR */}
+      <Nav />
 
-      {/* ================= CONTENT AREA (RESPECT SIDEBAR WIDTH) ================= */}
-      <div
-        style={{
-          marginLeft: 95, // collapsed sidebar width
-          transition: 'margin-left 0.3s ease',
-        }}
-      >
-        {/* ================= VIDEOS SECTION ================= */}
-        <section
+      {/* 🔥 MAIN */}
+      <main style={{ width: '100%', minHeight: '100vh' }}>
+        
+        {/* ================= HERO (FULL WIDTH) ================= */}
+        <AuroraHero />
+
+        {/* ================= CONTENT WRAPPER (SHIFTED) ================= */}
+        <div
           style={{
-            paddingTop: '5rem',
-            paddingBottom: '5rem',
-            maxWidth: 1400,
-            margin: '0 auto',
-            paddingLeft: 16,
-            paddingRight: 16,
+            marginLeft: 95, // respect sidebar width
+            transition: 'margin-left 0.3s ease',
           }}
         >
-          <h1 style={{ marginBottom: 24 }}>Videos</h1>
-
-          {error && (
-            <div style={{ color: 'red', marginBottom: 20 }}>
-              ❌ Error loading videos: {error}
-            </div>
-          )}
-
-          <div
+          {/* ================= VIDEOS SECTION ================= */}
+          <section
             style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
-              gap: 24,
+              paddingTop: '5rem',
+              paddingBottom: '5rem',
+              maxWidth: 1400,
+              margin: '0 auto',
+              paddingLeft: 16,
+              paddingRight: 16,
             }}
           >
-            {isLoading
-              ? Array.from({ length: 8 }).map((_, i) => (
-                  <VideoCardSkeleton key={i} />
-                ))
-              : videos.map((video) => (
-                  <VideoCard key={video.id} video={video} />
-                ))}
-          </div>
-        </section>
+            <h1 style={{ marginBottom: 24 }}>Videos</h1>
 
-        <NeonSeparator />
+            {error && (
+              <div style={{ color: 'red', marginBottom: 20 }}>
+                ❌ Error loading videos: {error}
+              </div>
+            )}
 
-        {/* ================= PRODUCT CARD ================= */}
-        <section style={{ paddingTop: '5rem', paddingBottom: '5rem' }}>
-          <AuroraProductCard />
-        </section>
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+                gap: 24,
+              }}
+            >
+              {isLoading
+                ? Array.from({ length: 8 }).map((_, i) => (
+                    <VideoCardSkeleton key={i} />
+                  ))
+                : videos.map((video) => (
+                    <VideoCard key={video.id} video={video} />
+                  ))}
+            </div>
+          </section>
 
-        <NeonSeparator />
+          <NeonSeparator />
 
-        {/* ================= TIMELINE ================= */}
-        <section style={{ paddingTop: '6rem', paddingBottom: '6rem' }}>
-          <AuroraTimeline />
-        </section>
+          {/* ================= PRODUCT CARD ================= */}
+          <section style={{ paddingTop: '5rem', paddingBottom: '5rem' }}>
+            <AuroraProductCard />
+          </section>
 
-        <NeonSeparator />
+          <NeonSeparator />
 
-        {/* ================= PRODUCT MOSAIC ================= */}
-        <section style={{ paddingTop: '6rem', paddingBottom: '6rem' }}>
-          <AuroraProductMosaic />
-        </section>
+          {/* ================= TIMELINE ================= */}
+          <section style={{ paddingTop: '6rem', paddingBottom: '6rem' }}>
+            <AuroraTimeline />
+          </section>
 
-        <Footer />
-      </div>
-    </>
+          <NeonSeparator />
+
+          {/* ================= PRODUCT MOSAIC ================= */}
+          <section style={{ paddingTop: '6rem', paddingBottom: '6rem' }}>
+            <AuroraProductMosaic />
+          </section>
+
+          <Footer />
+        </div>
+      </main>
+    </div>
   );
 }
 
