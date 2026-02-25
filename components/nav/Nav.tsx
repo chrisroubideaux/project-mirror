@@ -29,6 +29,10 @@ export default function Nav() {
     { label: 'About', href: '/about', icon: <FaInfoCircle /> },
   ];
 
+  const neonGlow = isDark
+    ? '0 0 12px rgba(0,140,255,0.6)'
+    : '0 0 10px rgba(59,130,246,0.6)';
+
   return (
     <>
       {/* =========================
@@ -36,7 +40,7 @@ export default function Nav() {
       ========================== */}
       <motion.aside
         className="d-none d-sm-flex"
-        animate={{ width: collapsed ? 80 : 220 }}
+        animate={{ width: collapsed ? 90 : 220 }}
         transition={{ duration: 0.3 }}
         style={{
           height: '100vh',
@@ -56,7 +60,6 @@ export default function Nav() {
           padding: '1rem 0.5rem',
         }}
       >
-        {/* TOP SECTION */}
         <div>
           {/* Collapse Button */}
           <div
@@ -66,11 +69,14 @@ export default function Nav() {
               marginBottom: 20,
             }}
           >
-            <FaBars
-              size={18}
+            <motion.div
+              whileHover={{ rotate: 90 }}
+              transition={{ duration: 0.3 }}
               style={{ cursor: 'pointer' }}
               onClick={() => setCollapsed(!collapsed)}
-            />
+            >
+              <FaBars size={18} />
+            </motion.div>
           </div>
 
           {/* Logo */}
@@ -85,32 +91,44 @@ export default function Nav() {
           </div>
 
           {/* Links */}
-          <nav style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          <nav style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
             {links.map(({ label, href, icon }) => {
               const active = pathname === href;
 
               return (
                 <Link key={href} href={href} style={{ textDecoration: 'none' }}>
                   <motion.div
-                    whileHover={{ scale: 1.05 }}
+                    whileHover={{
+                      scale: 1.05,
+                      boxShadow: neonGlow,
+                    }}
                     style={{
                       display: 'flex',
+                      flexDirection: collapsed ? 'column' : 'row',
                       alignItems: 'center',
-                      gap: 16,
+                      gap: collapsed ? 6 : 14,
                       padding: '10px 12px',
-                      borderRadius: 12,
-                      justifyContent: collapsed ? 'center' : 'flex-start',
+                      borderRadius: 14,
+                      justifyContent: 'center',
                       background: active
                         ? isDark
                           ? 'rgba(0,140,255,0.25)'
                           : 'rgba(59,130,246,0.15)'
                         : 'transparent',
                       color: isDark ? '#eee' : '#333',
-                      transition: 'all .2s ease',
+                      transition: 'all .25s ease',
+                      textAlign: 'center',
                     }}
                   >
                     {icon}
-                    {!collapsed && <span>{label}</span>}
+                    <span
+                      style={{
+                        fontSize: collapsed ? 11 : 14,
+                        opacity: collapsed ? 0.8 : 1,
+                      }}
+                    >
+                      {label}
+                    </span>
                   </motion.div>
                 </Link>
               );
@@ -119,19 +137,26 @@ export default function Nav() {
             {/* Login */}
             <Link href="/login" style={{ textDecoration: 'none' }}>
               <motion.div
-                whileHover={{ scale: 1.05 }}
+                whileHover={{
+                  scale: 1.05,
+                  boxShadow: neonGlow,
+                }}
                 style={{
                   display: 'flex',
+                  flexDirection: collapsed ? 'column' : 'row',
                   alignItems: 'center',
-                  gap: 16,
+                  gap: collapsed ? 6 : 14,
                   padding: '10px 12px',
-                  borderRadius: 12,
-                  justifyContent: collapsed ? 'center' : 'flex-start',
+                  borderRadius: 14,
+                  justifyContent: 'center',
                   color: isDark ? '#9aeaff' : '#2563eb',
+                  textAlign: 'center',
                 }}
               >
                 <FaSignInAlt />
-                {!collapsed && <span>Login</span>}
+                <span style={{ fontSize: collapsed ? 11 : 14 }}>
+                  Login
+                </span>
               </motion.div>
             </Link>
           </nav>
@@ -165,14 +190,18 @@ export default function Nav() {
             : '1px solid rgba(0,0,0,0.08)',
         }}
       >
-        <FaBars
-          size={22}
-          style={{
-            cursor: 'pointer',
-            color: isDark ? '#fff' : '#111',
-          }}
-          onClick={() => setMobileOpen(true)}
-        />
+        <motion.div
+          onClick={() => setMobileOpen(!mobileOpen)}
+          style={{ cursor: 'pointer' }}
+          animate={{ rotate: mobileOpen ? 90 : 0 }}
+          transition={{ duration: 0.3 }}
+        >
+          {mobileOpen ? (
+            <FaTimes size={22} />
+          ) : (
+            <FaBars size={22} />
+          )}
+        </motion.div>
       </div>
 
       {/* =========================
@@ -181,12 +210,10 @@ export default function Nav() {
       <AnimatePresence>
         {mobileOpen && (
           <>
-            {/* Overlay */}
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 0.4 }}
               exit={{ opacity: 0 }}
-              transition={{ duration: 0.2 }}
               onClick={() => setMobileOpen(false)}
               style={{
                 position: 'fixed',
@@ -196,7 +223,6 @@ export default function Nav() {
               }}
             />
 
-            {/* Drawer */}
             <motion.div
               initial={{ x: -260 }}
               animate={{ x: 0 }}
@@ -218,7 +244,6 @@ export default function Nav() {
                 flexDirection: 'column',
               }}
             >
-              {/* Drawer Header */}
               <div
                 style={{
                   display: 'flex',
@@ -228,7 +253,6 @@ export default function Nav() {
                 }}
               >
                 <AuroraLogo3D />
-
                 <FaTimes
                   size={20}
                   style={{ cursor: 'pointer' }}
@@ -240,8 +264,7 @@ export default function Nav() {
                 <ThemeToggleButton />
               </div>
 
-              {/* Links */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
                 {links.map(({ label, href, icon }) => (
                   <Link
                     key={href}
@@ -249,16 +272,19 @@ export default function Nav() {
                     onClick={() => setMobileOpen(false)}
                     style={{ textDecoration: 'none' }}
                   >
-                    <div
+                    <motion.div
+                      whileHover={{ scale: 1.05, boxShadow: neonGlow }}
                       style={{
                         display: 'flex',
                         alignItems: 'center',
                         gap: 12,
                         color: isDark ? '#eee' : '#333',
+                        padding: '10px 12px',
+                        borderRadius: 12,
                       }}
                     >
                       {icon} {label}
-                    </div>
+                    </motion.div>
                   </Link>
                 ))}
 
@@ -267,16 +293,19 @@ export default function Nav() {
                   onClick={() => setMobileOpen(false)}
                   style={{ textDecoration: 'none' }}
                 >
-                  <div
+                  <motion.div
+                    whileHover={{ scale: 1.05, boxShadow: neonGlow }}
                     style={{
                       display: 'flex',
                       alignItems: 'center',
                       gap: 12,
                       color: isDark ? '#9aeaff' : '#2563eb',
+                      padding: '10px 12px',
+                      borderRadius: 12,
                     }}
                   >
                     <FaSignInAlt /> Login
-                  </div>
+                  </motion.div>
                 </Link>
               </div>
             </motion.div>
@@ -286,7 +315,6 @@ export default function Nav() {
     </>
   );
 }
-
 
 {/*
 
