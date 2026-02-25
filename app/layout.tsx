@@ -50,12 +50,7 @@ export default function RootLayout({
 
               {/* MAIN CONTENT */}
               <main
-                style={{
-                  marginLeft: 80, // collapsed sidebar width
-                  width: "100%",
-                  minHeight: "100vh",
-                  transition: "margin-left .3s ease",
-                }}
+                 style={{ width: "100%", minHeight: "100vh" }}
               >
                 {children}
               </main>
