@@ -1,12 +1,8 @@
 // components/avatar/intro/AuroraIntroPresence.tsx
-// components/avatar/intro/AuroraIntroPresence.tsx
 "use client";
 
 import { useEffect, useRef, useState } from "react";
 
-/* ============================= */
-/* TYPES                         */
-/* ============================= */
 
 type AuroraState = "loading" | "talking" | "done";
 
@@ -18,9 +14,8 @@ type Particle = {
   seed: number;
 };
 
-/* ============================= */
-/* HELPERS                       */
-/* ============================= */
+
+/* HELPERS*/
 
 const clamp = (v: number, a: number, b: number) =>
   Math.max(a, Math.min(b, v));
@@ -52,9 +47,7 @@ function getApiBase() {
   return "http://localhost:5000";
 }
 
-/* ============================= */
-/* COMPONENT                     */
-/* ============================= */
+/* COMPONENT */
 
 export default function AuroraIntroPresence() {
   const [state, setState] = useState<AuroraState>("loading");
@@ -80,10 +73,8 @@ export default function AuroraIntroPresence() {
   // ✅ prevents double playback in dev strict mode
   const startedRef = useRef(false);
 
-  /* ============================= */
-  /* INIT PARTICLES                */
-  /* ============================= */
-
+/* INIT PARTICLES */
+  
   const initParticles = (count: number) => {
     particlesRef.current = Array.from({ length: count }).map(() => {
       const r = Math.sqrt(Math.random());
@@ -97,9 +88,7 @@ export default function AuroraIntroPresence() {
     });
   };
 
-  /* ============================= */
-  /* FETCH INTRO + AUDIO SETUP     */
-  /* ============================= */
+  /* FETCH INTRO + AUDIO SETUP */
 
   useEffect(() => {
     let mounted = true;
@@ -199,9 +188,7 @@ export default function AuroraIntroPresence() {
     };
   }, []);
 
-  /* ============================= */
-  /* RENDER LOOP (FULL ENGINE)     */
-  /* ============================= */
+  /* RENDER LOOP (FULL ENGINE) */
 
   useEffect(() => {
     const canvas = canvasRef.current;

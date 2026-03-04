@@ -1,4 +1,5 @@
 // components/admin/aurora/AuroraUserInfoCard.tsx
+
 'use client';
 
 type Props = {
@@ -11,7 +12,6 @@ export default function AuroraUserInfoCard({ snapshot }: Props) {
   return (
     <div className="card aurora-card mb-4 p-4">
       <h6 className="mb-3">User Profile</h6>
-
       <div className="row">
         <div className="col-md-4">
           <div className="text-muted small">User ID</div>
