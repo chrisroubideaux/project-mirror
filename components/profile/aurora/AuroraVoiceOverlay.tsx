@@ -156,9 +156,7 @@ export default function AuroraVoiceOverlay({
             cursor: "pointer"
           }}
         >
-          🎤
         </button>
-
       </div>
     </div>
   );

@@ -1,7 +1,5 @@
 # backend/aurora/emotion.py
 
-# backend/aurora/emotion.py
-
 from __future__ import annotations
 
 from dataclasses import dataclass

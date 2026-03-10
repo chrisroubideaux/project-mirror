@@ -14,8 +14,8 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 # ----------------------------------------------------
 # Extensions (SINGLE SOURCE OF TRUTH)
 # ----------------------------------------------------
-from extensions import db, jwt, limiter
 
+from extensions import db, jwt, limiter
 
 # ----------------------------------------------------
 # Models (needed for migrations / Alembic discovery)
@@ -31,11 +31,12 @@ from aurora.models_emotion import AuroraEmotion
 from aurora.models_session_summary import AuroraSessionSummary
 from aurora.models_memory import AuroraUserMemory
 from aurora.models_personality import AuroraPersonality
-
+from aurora.routes_emotion import aurora_emotion_bp
 
 # ----------------------------------------------------
 # Blueprints
 # ----------------------------------------------------
+
 # Uploads
 from uploads.routes import uploads_bp
 
@@ -125,30 +126,33 @@ def create_app():
     # Register Blueprints
     # ----------------------------------------------------
     # Admin
-    app.register_blueprint(admin_bp)        # /api/admins/*
-    app.register_blueprint(admin_oauth_bp)  # /auth/admin/*
+    app.register_blueprint(admin_bp)       
+    app.register_blueprint(admin_oauth_bp)  
 
     # Users
-    app.register_blueprint(user_bp)         # /api/users/*
-    app.register_blueprint(oauth_bp)        # /auth/*
+    app.register_blueprint(user_bp)      
+    app.register_blueprint(oauth_bp)       
 
     # Core services
-    app.register_blueprint(emotion_bp)      # /api/emotion/*
-    app.register_blueprint(aurora_bp)       # /api/aurora/*
-    app.register_blueprint(whisper_bp)      # /api/whisper/*
+    app.register_blueprint(emotion_bp)
+    app.register_blueprint(aurora_bp)     
+    app.register_blueprint(whisper_bp)  
 
     # Videos
-    app.register_blueprint(videos_bp)       # /api/videos/*
+    app.register_blueprint(videos_bp)      
 
     # Face login
-    app.register_blueprint(face_bp)         # /api/face/*
-    app.register_blueprint(admin_face_bp)   # /api/admin/face/*
+    app.register_blueprint(face_bp)       
+    app.register_blueprint(admin_face_bp) 
 
     # Uploads
-    app.register_blueprint(uploads_bp)      # /api/uploads/*
+    app.register_blueprint(uploads_bp) 
     
     # Aurora user routes
     app.register_blueprint(aurora_user_bp)
+    
+    # Aurora emotion routes
+    app.register_blueprint(aurora_emotion_bp)
 
     # ----------------------------------------------------
     # Health Check
