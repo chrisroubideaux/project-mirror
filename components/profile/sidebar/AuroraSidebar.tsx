@@ -1,4 +1,5 @@
 // components/profile/sidebar/AuroraSidebar.tsx
+
 'use client';
 
 import React, { useEffect, useState } from 'react';
@@ -7,19 +8,16 @@ import {
   FaHome,
   FaHistory,
   FaHeart,
+  FaRobot,
   FaCog,
   FaSignOutAlt,
   FaPlayCircle,
   FaMoon,
   FaSun,
   FaFilm,
-  FaMicrophone,
 } from 'react-icons/fa';
 import { motion } from 'framer-motion';
 
-/* =============================
-   Types
-============================= */
 
 export type AuroraSidebarTab =
   | 'home'
@@ -38,9 +36,6 @@ type AuroraSidebarProps = {
   onLogout?: () => void;
 };
 
-/* =============================
-   Component
-============================= */
 
 export default function AuroraSidebar({
   userId,
@@ -52,10 +47,6 @@ export default function AuroraSidebar({
   const [collapsed, setCollapsed] = useState(false);
   const [theme, setTheme] = useState<'light' | 'dark'>('dark');
 
-  /* ---------------------------------------------
-     Theme bootstrap
-  --------------------------------------------- */
-
   useEffect(() => {
     const stored = localStorage.getItem('aurora-theme') as
       | 'light'
@@ -63,22 +54,16 @@ export default function AuroraSidebar({
       | null;
 
     const initial = stored ?? 'dark';
-
     setTheme(initial);
     document.documentElement.setAttribute('data-theme', initial);
   }, []);
 
   const toggleTheme = () => {
     const next = theme === 'dark' ? 'light' : 'dark';
-
     setTheme(next);
     localStorage.setItem('aurora-theme', next);
     document.documentElement.setAttribute('data-theme', next);
   };
-
-  /* ---------------------------------------------
-     Tabs
-  --------------------------------------------- */
 
   const links: {
     tab: AuroraSidebarTab;
@@ -86,35 +71,15 @@ export default function AuroraSidebar({
     icon: React.ReactElement;
     aria: string;
   }[] = [
-    { tab: 'home', label: 'Home', icon: <FaHome />, aria: 'Home Feed' },
-
-    {
-      tab: 'watching',
-      label: 'Watching',
-      icon: <FaPlayCircle />,
-      aria: 'Continue Watching',
-    },
-
-    { tab: 'history', label: 'History', icon: <FaHistory />, aria: 'Watch History' },
-
-    { tab: 'liked', label: 'Liked', icon: <FaHeart />, aria: 'Liked Videos' },
-
-    { tab: 'reels', label: 'Reels', icon: <FaFilm />, aria: 'Short-form Reels' },
-
-    /* Aurora Voice Companion */
-    {
-      tab: 'aurora',
-      label: 'Talk to Aurora',
-      icon: <FaMicrophone />,
-      aria: 'Aurora Voice AI Companion',
-    },
-
-    { tab: 'settings', label: 'Settings', icon: <FaCog />, aria: 'User Settings' },
+    { tab: 'home',     label: 'Home',     icon: <FaHome />,        aria: 'Home Feed' },
+    { tab: 'watching', label: 'Watching', icon: <FaPlayCircle />, aria: 'Continue Watching' },
+    { tab: 'history',  label: 'History',  icon: <FaHistory />,    aria: 'Watch History' },
+    { tab: 'liked',    label: 'Liked',    icon: <FaHeart />,      aria: 'Liked Videos' },
+    { tab: 'reels',    label: 'Reels',    icon: <FaFilm />,       aria: 'Short-form Reels' },
+    { tab: 'aurora',   label: 'Aurora',   icon: <FaRobot />,      aria: 'Aurora AI Companion' },
+    { tab: 'settings', label: 'Settings', icon: <FaCog />,        aria: 'User Settings' },
+    
   ];
-
-  /* ---------------------------------------------
-     Render
-  --------------------------------------------- */
 
   return (
     <motion.div
@@ -132,10 +97,7 @@ export default function AuroraSidebar({
       }}
       data-user-id={userId}
     >
-      {/* =============================
-          Header
-      ============================== */}
-
+     
       <div>
         <div className="d-flex align-items-center justify-content-between p-3 border-bottom">
           <h6 className="mb-0 fw-light">
@@ -162,10 +124,6 @@ export default function AuroraSidebar({
           </div>
         </div>
 
-        {/* =============================
-            Navigation
-        ============================== */}
-
         <ul className="nav flex-column mt-3">
           {links.map(({ tab, label, icon, aria }) => {
             const isActive = activeTab === tab;
@@ -187,15 +145,13 @@ export default function AuroraSidebar({
                   }}
                 >
                   <span className="me-2">{icon}</span>
-
                   {!collapsed && <span>{label}</span>}
                 </button>
               </li>
             );
           })}
 
-          {/* Logout */}
-
+         
           {onLogout && (
             <li className="nav-item mt-3">
               <button
@@ -212,10 +168,6 @@ export default function AuroraSidebar({
           )}
         </ul>
       </div>
-
-      {/* =============================
-          Footer
-      ============================== */}
 
       <div className="p-3 border-top small" style={{ opacity: 0.6 }}>
         {!collapsed ? (
@@ -234,6 +186,9 @@ export default function AuroraSidebar({
 }
 
 {/*
+
+// components/profile/sidebar/AuroraSidebar.tsx
+// components/profile/sidebar/AuroraSidebar.tsx
 
 // components/profile/sidebar/AuroraSidebar.tsx
 'use client';

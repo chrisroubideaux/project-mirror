@@ -1,149 +1,301 @@
 // components/profile/aurora/AuroraAudioController.tsx
-// components/profile/aurora/AuroraAudioController.tsx
 "use client";
 
 import { useEffect, useRef } from "react";
 
 type Props = {
   audioUrl: string | null;
+  token: string | null;
   onStart?: () => void;
   onEnd?: () => void;
   onEnergy?: (energy01: number) => void;
   onError?: (err: string) => void;
 };
 
-const clamp01 = (n: number) => Math.max(0, Math.min(1, n));
-
 export default function AuroraAudioController({
   audioUrl,
+  token,
   onStart,
   onEnd,
   onEnergy,
   onError,
 }: Props) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const objectUrlRef = useRef<string | null>(null);
 
-  const ctxRef = useRef<AudioContext | null>(null);
-  const analyserRef = useRef<AnalyserNode | null>(null);
-  const dataRef = useRef<Uint8Array | null>(null);
-  const rafRef = useRef<number | null>(null);
-
-  const startedRef = useRef(false);
+  const onStartRef = useRef(onStart);
+  const onEndRef = useRef(onEnd);
+  const onEnergyRef = useRef(onEnergy);
+  const onErrorRef = useRef(onError);
 
   useEffect(() => {
-    // stop any existing playback
-    const cleanup = () => {
-      if (rafRef.current) cancelAnimationFrame(rafRef.current);
-      rafRef.current = null;
+    onStartRef.current = onStart;
+  }, [onStart]);
 
-      if (audioRef.current) {
-        try {
-          audioRef.current.pause();
-          audioRef.current.src = "";
-        } catch {}
-        audioRef.current = null;
-      }
-      if (ctxRef.current) {
-        try {
-          ctxRef.current.close();
-        } catch {}
-        ctxRef.current = null;
-      }
-      analyserRef.current = null;
-      dataRef.current = null;
-      startedRef.current = false;
+  useEffect(() => {
+    onEndRef.current = onEnd;
+  }, [onEnd]);
 
-      onEnergy?.(0);
+  useEffect(() => {
+    onEnergyRef.current = onEnergy;
+  }, [onEnergy]);
+
+  useEffect(() => {
+    onErrorRef.current = onError;
+  }, [onError]);
+
+  const cleanupObjectUrl = () => {
+    if (objectUrlRef.current) {
+      URL.revokeObjectURL(objectUrlRef.current);
+      objectUrlRef.current = null;
+    }
+  };
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    const handlePlay = () => {
+      onStartRef.current?.();
     };
 
-    if (!audioUrl) {
-      cleanup();
-      return;
-    }
+    const handleEnded = () => {
+      onEnergyRef.current?.(0);
+      onEndRef.current?.();
+    };
 
-    let mounted = true;
+    const handleError = () => {
+      onEnergyRef.current?.(0);
+      onErrorRef.current?.("Failed to load or play Aurora audio.");
+      onEndRef.current?.();
+    };
 
-    async function start() {
-      cleanup();
-
-      try {
-        const audio = new Audio(audioUrl as string);
-        audio.crossOrigin = "anonymous";
-        audioRef.current = audio;
-
-        const ctx = new AudioContext();
-        ctxRef.current = ctx;
-
-        const analyser = ctx.createAnalyser();
-        analyser.fftSize = 1024;
-        analyser.smoothingTimeConstant = 0.85;
-        analyserRef.current = analyser;
-        dataRef.current = new Uint8Array(analyser.fftSize);
-
-        const source = ctx.createMediaElementSource(audio);
-        source.connect(analyser);
-        analyser.connect(ctx.destination);
-
-        audio.onplay = () => {
-          if (!mounted) return;
-          startedRef.current = true;
-          onStart?.();
-        };
-
-        audio.onended = () => {
-          if (!mounted) return;
-          onEnergy?.(0);
-          onEnd?.();
-        };
-
-        audio.onerror = () => {
-          if (!mounted) return;
-          onEnergy?.(0);
-          onError?.("Audio playback error");
-          onEnd?.();
-        };
-
-        await ctx.resume();
-
-        // user gesture should exist (message send). still can fail on iOS if not gesture:
-        await audio.play();
-
-        const tick = () => {
-          if (!mounted) return;
-          rafRef.current = requestAnimationFrame(tick);
-
-          const analyser = analyserRef.current;
-          const data = dataRef.current;
-          if (!analyser || !data) return;
-
-          analyser.getByteTimeDomainData(data as Uint8Array<ArrayBuffer>);
-
-          let sum = 0;
-          for (let i = 0; i < data.length; i++) {
-            const v = (data[i] - 128) / 128;
-            sum += v * v;
-          }
-          const rms = Math.sqrt(sum / data.length);
-          // scale into nicer 0..1
-          const energy = clamp01(rms * 3.2);
-          onEnergy?.(energy);
-        };
-
-        tick();
-      } catch (e: any) {
-        onEnergy?.(0);
-        onError?.(e?.message || "Audio init failed");
-        onEnd?.();
-      }
-    }
-
-    start();
+    audio.addEventListener("play", handlePlay);
+    audio.addEventListener("ended", handleEnded);
+    audio.addEventListener("error", handleError);
 
     return () => {
-      mounted = false;
-      cleanup();
-    };
-  }, [audioUrl, onStart, onEnd, onEnergy, onError]);
+      audio.removeEventListener("play", handlePlay);
+      audio.removeEventListener("ended", handleEnded);
+      audio.removeEventListener("error", handleError);
 
-  return null;
+      try {
+        audio.pause();
+        audio.removeAttribute("src");
+        audio.load();
+      } catch {}
+
+      cleanupObjectUrl();
+    };
+  }, []);
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    let cancelled = false;
+
+    const run = async () => {
+      try {
+        audio.pause();
+        audio.removeAttribute("src");
+        audio.load();
+      } catch {}
+
+      cleanupObjectUrl();
+
+      if (!audioUrl) return;
+
+      if (!token) {
+        onErrorRef.current?.("Missing auth token for audio request.");
+        onEndRef.current?.();
+        return;
+      }
+
+      try {
+        const res = await fetch(audioUrl, {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (!res.ok) {
+          const txt = await res.text().catch(() => "");
+          throw new Error(`Audio HTTP ${res.status} ${txt}`.trim());
+        }
+
+        const blob = await res.blob();
+
+        if (!blob || blob.size <= 0) {
+          throw new Error("Audio blob was empty.");
+        }
+
+        const objectUrl = URL.createObjectURL(blob);
+        objectUrlRef.current = objectUrl;
+
+        if (cancelled) return;
+
+        audio.src = objectUrl;
+        audio.load();
+        await audio.play();
+      } catch (e: any) {
+        if (cancelled) return;
+        onErrorRef.current?.(e?.message || "Audio playback failed.");
+        onEndRef.current?.();
+      }
+    };
+
+    run();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [audioUrl, token]);
+
+  return <audio ref={audioRef} style={{ display: "none" }} playsInline preload="auto" />;
 }
+
+
+{/*
+
+// components/profile/aurora/AuroraAudioController.tsx
+
+"use client";
+
+import { useEffect, useRef } from "react";
+
+type Props = {
+  audioUrl: string | null;
+  token: string | null;
+  onStart?: () => void;
+  onEnd?: () => void;
+  onEnergy?: (energy01: number) => void;
+  onError?: (err: string) => void;
+};
+
+export default function AuroraAudioController({
+  audioUrl,
+  token,
+  onStart,
+  onEnd,
+  onEnergy,
+  onError,
+}: Props) {
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const objectUrlRef = useRef<string | null>(null);
+
+  const cleanupObjectUrl = () => {
+    if (objectUrlRef.current) {
+      URL.revokeObjectURL(objectUrlRef.current);
+      objectUrlRef.current = null;
+    }
+  };
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    const handlePlay = () => {
+      onStart?.();
+    };
+
+    const handleEnded = () => {
+      onEnergy?.(0);
+      onEnd?.();
+    };
+
+    const handleError = () => {
+      onEnergy?.(0);
+      onError?.("Failed to load or play Aurora audio.");
+      onEnd?.();
+    };
+
+    audio.addEventListener("play", handlePlay);
+    audio.addEventListener("ended", handleEnded);
+    audio.addEventListener("error", handleError);
+
+    return () => {
+      audio.removeEventListener("play", handlePlay);
+      audio.removeEventListener("ended", handleEnded);
+      audio.removeEventListener("error", handleError);
+
+      try {
+        audio.pause();
+        audio.removeAttribute("src");
+        audio.load();
+      } catch {}
+
+      cleanupObjectUrl();
+    };
+  }, [onEnd, onEnergy, onError, onStart]);
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    let cancelled = false;
+
+    const run = async () => {
+      try {
+        audio.pause();
+        audio.removeAttribute("src");
+        audio.load();
+      } catch {}
+
+      cleanupObjectUrl();
+
+      if (!audioUrl) return;
+
+      if (!token) {
+        onError?.("Missing auth token for audio request.");
+        onEnd?.();
+        return;
+      }
+
+      try {
+        const res = await fetch(audioUrl, {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (!res.ok) {
+          const txt = await res.text().catch(() => "");
+          throw new Error(`Audio HTTP ${res.status} ${txt}`.trim());
+        }
+
+        const blob = await res.blob();
+
+        if (!blob || blob.size <= 0) {
+          throw new Error("Audio blob was empty.");
+        }
+
+        const objectUrl = URL.createObjectURL(blob);
+        objectUrlRef.current = objectUrl;
+
+        if (cancelled) return;
+
+        audio.src = objectUrl;
+        audio.load();
+        await audio.play();
+      } catch (e: any) {
+        if (cancelled) return;
+        onError?.(e?.message || "Audio playback failed.");
+        onEnd?.();
+      }
+    };
+
+    run();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [audioUrl, token, onEnd, onError]);
+
+  return <audio ref={audioRef} style={{ display: "none" }} playsInline preload="auto" />;
+}
+
+
+*/}

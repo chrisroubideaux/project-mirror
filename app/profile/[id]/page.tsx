@@ -1,4 +1,5 @@
 // app/profile/[id]/page.tsx
+
 'use client';
 
 import { useRouter, useSearchParams, useParams } from 'next/navigation';
@@ -14,6 +15,7 @@ import ReelsFeed from '@/components/profile/reels/ReelsFeed';
 import WatchingFeed from '@/components/profile/watching/WatchingFeed';
 import HistoryFeed from '@/components/profile/history/HistoryFeed';
 import LikedFeed from '@/components/profile/liked/LikedFeed';
+
 import UserAurora from '@/components/profile/aurora/UserAurora';
 
 const API_BASE =
@@ -29,6 +31,7 @@ type PageUser = {
 };
 
 export default function AuroraProfilePage() {
+
   const router = useRouter();
   const searchParams = useSearchParams();
   const params = useParams();
@@ -42,7 +45,9 @@ export default function AuroraProfilePage() {
   const [activeTab, setActiveTab] =
     useState<AuroraSidebarTab>('home');
 
+
   useEffect(() => {
+
     const tokenFromURL = searchParams.get('token');
 
     if (tokenFromURL) {
@@ -59,7 +64,9 @@ export default function AuroraProfilePage() {
     }
 
     (async () => {
+
       try {
+
         const res = await fetch(`${API_BASE}/api/users/me`, {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -78,25 +85,35 @@ export default function AuroraProfilePage() {
 
         setUser(data);
 
+
         if (
           routeId === 'me' ||
           (routeId && routeId !== data.id)
         ) {
           router.replace(`/profile/${data.id}`);
         }
+
       } catch (err) {
+
         console.error('❌ Profile bootstrap failed:', err);
         setError('Authentication failed');
+
       } finally {
+
         setLoading(false);
+
       }
+
     })();
+
   }, [searchParams, routeId, router]);
+
 
   const handleLogout = () => {
     localStorage.removeItem(TOKEN_KEY);
     router.push('/login');
   };
+
 
   if (loading) {
     return (
@@ -111,8 +128,12 @@ export default function AuroraProfilePage() {
     return null;
   }
 
+  
+
   return (
     <>
+     
+
       {activeTab === 'aurora' && (
         <UserAurora
           userName={user.full_name}
@@ -130,6 +151,7 @@ export default function AuroraProfilePage() {
           background: 'var(--app-bg)',
         }}
       >
+
         <AuroraSidebar
           userId={user.id}
           userName={user.full_name}
@@ -137,6 +159,7 @@ export default function AuroraProfilePage() {
           onTabChange={setActiveTab}
           onLogout={handleLogout}
         />
+
 
         <div
           className="aurora-content"
@@ -146,7 +169,9 @@ export default function AuroraProfilePage() {
             padding: 24,
           }}
         >
+
           <AnimatePresence mode="wait">
+
             <motion.div
               key={activeTab}
               initial={{ opacity: 0, y: 12 }}
@@ -155,6 +180,7 @@ export default function AuroraProfilePage() {
               transition={{ duration: 0.2 }}
               style={{ minHeight: '100%' }}
             >
+
               {activeTab === 'home' && (
                 <HomeFeed userId={user.id} />
               )}
@@ -166,7 +192,7 @@ export default function AuroraProfilePage() {
               {activeTab === 'history' && (
                 <HistoryFeed userId={user.id} />
               )}
-
+              
               {activeTab === 'reels' && (
                 <ReelsFeed userId={user.id} />
               )}
@@ -174,16 +200,25 @@ export default function AuroraProfilePage() {
               {activeTab === 'liked' && (
                 <LikedFeed userId={user.id} />
               )}
+
             </motion.div>
+
           </AnimatePresence>
+
         </div>
+
       </div>
     </>
   );
 }
 
 
+
+
+
 {/*
+// app/profile/[id]/page.tsx
+
 // app/profile/[id]/page.tsx
 'use client';
 
@@ -377,7 +412,7 @@ export default function AuroraProfilePage() {
               {activeTab === 'history' && (
                 <HistoryFeed userId={user.id} />
               )}
-
+              
               {activeTab === 'reels' && (
                 <ReelsFeed userId={user.id} />
               )}
@@ -396,6 +431,8 @@ export default function AuroraProfilePage() {
     </>
   );
 }
+
+
 
 */}
 
