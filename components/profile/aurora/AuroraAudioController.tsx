@@ -67,7 +67,6 @@ export default function AuroraAudioController({
     const handleError = () => {
       onEnergyRef.current?.(0);
       onErrorRef.current?.("Failed to load or play Aurora audio.");
-      onEndRef.current?.();
     };
 
     audio.addEventListener("play", handlePlay);
@@ -96,6 +95,8 @@ export default function AuroraAudioController({
     let cancelled = false;
 
     const run = async () => {
+      onEnergyRef.current?.(0);
+
       try {
         audio.pause();
         audio.removeAttribute("src");
@@ -108,7 +109,6 @@ export default function AuroraAudioController({
 
       if (!token) {
         onErrorRef.current?.("Missing auth token for audio request.");
-        onEndRef.current?.();
         return;
       }
 
@@ -141,8 +141,8 @@ export default function AuroraAudioController({
         await audio.play();
       } catch (e: any) {
         if (cancelled) return;
+        onEnergyRef.current?.(0);
         onErrorRef.current?.(e?.message || "Audio playback failed.");
-        onEndRef.current?.();
       }
     };
 
@@ -153,9 +153,15 @@ export default function AuroraAudioController({
     };
   }, [audioUrl, token]);
 
-  return <audio ref={audioRef} style={{ display: "none" }} playsInline preload="auto" />;
+  return (
+    <audio
+      ref={audioRef}
+      style={{ display: "none" }}
+      playsInline
+      preload="auto"
+    />
+  );
 }
-
 
 {/*
 

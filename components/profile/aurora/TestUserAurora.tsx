@@ -1,4 +1,5 @@
 // components/profile/aurora/UserAurora.tsx
+// components/profile/aurora/UserAurora.tsx
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";

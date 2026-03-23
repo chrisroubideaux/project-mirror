@@ -1,24 +1,20 @@
 # backend/aurora/routes_user.py
 
 from __future__ import annotations
-
 import re
 import uuid
 from pathlib import Path
-
 from flask import Blueprint, jsonify, request, send_file, current_app
-
 from extensions import db, limiter
 from utils.decorators import token_required
 
 from aurora.speech_user import generate_and_store_user_speech
-from aurora.emotion_fusion import fuse_face_text
 from aurora.models_messages import AuroraMessage
-from aurora.models_emotion import AuroraEmotion
 from aurora.relationship import update_on_message, get_or_create_relationship
 from aurora.guardrails import check_guardrails
 from aurora.brain_user import generate_reply
-from aurora.emotion import analyze_text_emotion
+from services.datetime_context import get_time_context
+
 
 from aurora.memory_store import (
     extract_memory_candidates,
@@ -43,7 +39,6 @@ aurora_user_bp = Blueprint(
     __name__,
     url_prefix="/api/user/aurora",
 )
-
 
 # -------------------------------------------------------
 # HELPERS
@@ -74,7 +69,17 @@ def _first_name_from_user(current_user) -> str:
 
 
 def _build_greeting(name: str) -> str:
-    return f"Hi {name}, I’m Aurora. I’m here with you. Take your time."
+    ctx = get_time_context()
+    tod = ctx.get("time_of_day", "night")
+
+    if tod == "morning":
+        return f"Good morning, {name}. How are you feeling this morning?"
+    elif tod == "afternoon":
+        return f"Good afternoon, {name}. How are you feeling this afternoon?"
+    elif tod == "evening":
+        return f"Good evening, {name}. How are you feeling this evening?"
+    else:
+        return f"Good night, {name}. How are you feeling tonight?"
 
 
 def _safe_uuid(session_id: str | None) -> uuid.UUID | None:
@@ -84,33 +89,6 @@ def _safe_uuid(session_id: str | None) -> uuid.UUID | None:
         return uuid.UUID(session_id)
     except ValueError:
         return None
-
-
-def _clamp_pad(pad: dict | None) -> dict | None:
-    if not isinstance(pad, dict):
-        return None
-
-    try:
-        v = float(pad["valence"])
-        a = float(pad["arousal"])
-        d = float(pad["dominance"])
-    except Exception:
-        return None
-
-    return {
-        "valence": max(0.0, min(1.0, v)),
-        "arousal": max(0.0, min(1.0, a)),
-        "dominance": max(0.0, min(1.0, d)),
-    }
-
-
-def _safe_float(value, default=None):
-    try:
-        if value is None:
-            return default
-        return float(value)
-    except Exception:
-        return default
 
 
 # -------------------------------------------------------
@@ -139,6 +117,7 @@ def greet(current_user):
             meta_json={
                 "type": "greeting",
                 "audio_url": audio_url,
+                "time_of_day": get_time_context().get("time_of_day"),
             },
         )
         db.session.add(greeting_msg)
@@ -159,8 +138,8 @@ def greet(current_user):
 
 # -------------------------------------------------------
 # CONVERSE
+# EMOTION ANALYTICS DISABLED FOR NOW
 # -------------------------------------------------------
-
 @aurora_user_bp.post("/converse")
 @token_required
 def converse(current_user):
@@ -168,7 +147,6 @@ def converse(current_user):
 
     user_text = (payload.get("message") or "").strip()
     session_id = payload.get("session_id")
-    live_face_pad = payload.get("live_face_pad") or None
 
     if not user_text:
         return jsonify({"error": "message_required"}), 400
@@ -183,50 +161,16 @@ def converse(current_user):
     # --------------------------------------------------
     # 1) Guardrails
     # --------------------------------------------------
-
     guardrail_result = check_guardrails(user_text)
 
     # --------------------------------------------------
-    # 2) Emotion Tagging + Live Fusion
+    # 2) Emotion analytics disabled for now
     # --------------------------------------------------
-
-    skip_emotion = (
-        guardrail_result.triggered
-        and guardrail_result.category in {
-            "self_harm",
-            "harm_others",
-            "illegal",
-            "sexual_minors",
-        }
-    )
-
-    text_emotion = {} if skip_emotion else analyze_text_emotion(user_text)
-
-    text_pad = None
-    if isinstance(text_emotion, dict):
-        text_pad = _clamp_pad({
-            "valence": text_emotion.get("valence"),
-            "arousal": text_emotion.get("arousal"),
-            "dominance": text_emotion.get("dominance"),
-        })
-
-    safe_face_pad = _clamp_pad(live_face_pad)
-
-    fused_live_pad = fuse_face_text(
-        face_pad=safe_face_pad,
-        text_pad=text_pad,
-    )
-
-    emotion_data = {
-        **(text_emotion if isinstance(text_emotion, dict) else {}),
-        "live_face_pad": safe_face_pad,
-        "fused_live_pad": fused_live_pad,
-    }
+    emotion_data = {}
 
     # --------------------------------------------------
     # 3) Store User Message
     # --------------------------------------------------
-
     try:
         user_msg = AuroraMessage(
             user_id=current_user.id,
@@ -253,85 +197,69 @@ def converse(current_user):
         return jsonify({"error": "failed_to_store_user_message"}), 500
 
     # --------------------------------------------------
-    # 4) Optional AuroraEmotion Snapshot
+    # 4) Relationship Update
     # --------------------------------------------------
-
     try:
-        if isinstance(fused_live_pad, dict):
-            emotion_row = AuroraEmotion(
-                user_id=current_user.id,
-                message_id=user_msg.id,
-                session_id=session_uuid,
-                sentiment_label=(text_emotion or {}).get("sentiment_label"),
-                sentiment_score=_safe_float((text_emotion or {}).get("sentiment_score")),
-                emotion_label=(
-                    (text_emotion or {}).get("emotion_label")
-                    or (text_emotion or {}).get("emotion")
-                ),
-                emotion_score=_safe_float(
-                    (text_emotion or {}).get("emotion_score")
-                    or (text_emotion or {}).get("score")
-                ),
-                valence=_safe_float(fused_live_pad.get("valence")),
-                arousal=_safe_float(fused_live_pad.get("arousal")),
-                dominance=_safe_float(fused_live_pad.get("dominance")),
-            )
-            db.session.add(emotion_row)
-            db.session.commit()
-    except Exception as e:
-        db.session.rollback()
-        print("\n!!!! AURORA EMOTION SAVE ERROR !!!!")
-        print(str(e))
-        print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n")
-
-    # --------------------------------------------------
-    # 5) Relationship Update
-    # --------------------------------------------------
-
-    sentiment_hint = fused_live_pad.get("valence") if isinstance(fused_live_pad, dict) else None
-
-    rel = update_on_message(
-        current_user.id,
-        user_text=user_text,
-        safety_flag=guardrail_result.triggered,
-        sentiment_hint=sentiment_hint,
-    )
-
-    # --------------------------------------------------
-    # 6) Assistant Response
-    # --------------------------------------------------
-
-    if guardrail_result.triggered:
-        assistant_reply = guardrail_result.response_override
-        usage = {}
-    else:
-        assistant_reply, usage = generate_reply(
+        rel = update_on_message(
             current_user.id,
-            session_uuid,
-            user_text,
-            rel,
-            guardrail_result,
-            live_emotion=fused_live_pad,
+            user_text=user_text,
+            safety_flag=guardrail_result.triggered,
+            sentiment_hint=None,
         )
+    except Exception as e:
+        print("\n!!!! AURORA RELATIONSHIP UPDATE ERROR !!!!")
+        print(str(e))
+        print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n")
+        rel = get_or_create_relationship(current_user.id)
 
     # --------------------------------------------------
-    # 7) Voice Generation
+    # 5) Assistant Response
     # --------------------------------------------------
+    try:
+        if guardrail_result.triggered:
+            assistant_reply = guardrail_result.response_override
+            usage = {}
+        else:
+            assistant_reply, usage = generate_reply(
+                current_user.id,
+                session_uuid,
+                rel,
+                guardrail_result,
+                live_emotion=None,
+            )
+    except Exception as e:
+        print("\n!!!! AURORA GENERATE REPLY ERROR !!!!")
+        print(str(e))
+        print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n")
+        return jsonify({"error": "failed_to_generate_reply"}), 500
 
-    voice_enabled = (rel.ritual_preferences or {}).get("voice_enabled", True)
+    if not assistant_reply:
+        assistant_reply = "I'm here with you."
+        usage = usage if isinstance(usage, dict) else {}
+
+    # --------------------------------------------------
+    # 6) Voice Generation
+    #    Keep isolated so TTS failure doesn't kill response
+    # --------------------------------------------------
+    voice_enabled = (getattr(rel, "ritual_preferences", {}) or {}).get("voice_enabled", True)
 
     audio_url = None
     if voice_enabled and assistant_reply:
-        audio_url = generate_and_store_user_speech(
-            text=assistant_reply,
-            user_id=str(current_user.id),
-            session_id=str(session_uuid),
-        )
+        try:
+            audio_url = generate_and_store_user_speech(
+                text=assistant_reply,
+                user_id=str(current_user.id),
+                session_id=str(session_uuid),
+            )
+        except Exception as e:
+            print("\n!!!! AURORA VOICE GENERATION ERROR !!!!")
+            print(str(e))
+            print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n")
+            audio_url = None
 
     # --------------------------------------------------
-    # 8) Store Assistant Message
+    # 7) Store Assistant Message
     # --------------------------------------------------
-
     try:
         assistant_msg = AuroraMessage(
             user_id=current_user.id,
@@ -340,9 +268,9 @@ def converse(current_user):
             content=assistant_reply,
             meta_json={
                 "guardrail_response": guardrail_result.triggered,
-                "usage": usage,
+                "usage": usage if isinstance(usage, dict) else {},
                 "audio_url": audio_url,
-                "emotion_context_used": fused_live_pad,
+                "emotion_context_used": None,
             },
         )
         db.session.add(assistant_msg)
@@ -355,9 +283,9 @@ def converse(current_user):
         return jsonify({"error": "failed_to_store_assistant_message"}), 500
 
     # --------------------------------------------------
-    # 9) Memory Promotion Layer
+    # 8) Memory Promotion Layer
+    #    Best-effort only; never block response
     # --------------------------------------------------
-
     try:
         print("\n========== MEMORY DEBUG ==========")
         print("User text:", user_text)
@@ -385,15 +313,14 @@ def converse(current_user):
         print("!!!!!!!!!!!!!!!!!!!!!!\n")
 
     # --------------------------------------------------
-    # RESPONSE
+    # 9) Response
     # --------------------------------------------------
-
     return jsonify({
         "session_id": str(session_uuid),
         "relationship": {
-            "familiarity_score": rel.familiarity_score,
-            "trust_score": rel.trust_score,
-            "interaction_count": rel.interaction_count,
+            "familiarity_score": getattr(rel, "familiarity_score", 0),
+            "trust_score": getattr(rel, "trust_score", 0),
+            "interaction_count": getattr(rel, "interaction_count", 0),
         },
         "guardrail": {
             "triggered": guardrail_result.triggered,
@@ -403,7 +330,7 @@ def converse(current_user):
         "emotion": emotion_data,
         "assistant_reply": assistant_reply,
         "audio_url": audio_url,
-        "usage": usage,
+        "usage": usage if isinstance(usage, dict) else {},
     }), 200
 
 
@@ -444,11 +371,11 @@ def end_session(current_user):
         summary = AuroraSessionSummary(
             user_id=current_user.id,
             session_id=session_uuid,
-            dominant_emotion=summary_dict.get("dominant_emotion"),
+            dominant_emotion=(summary_dict.get("dominant_emotion") or "")[:100],
             engagement_score=summary_dict.get("engagement_score", 0.5),
             primary_themes=summary_dict.get("primary_themes", []),
-            session_outcome=summary_dict.get("session_outcome"),
-            recommendation_tag=summary_dict.get("recommendation_tag"),
+            session_outcome=(summary_dict.get("session_outcome") or "")[:100],
+            recommendation_tag=(summary_dict.get("recommendation_tag") or "")[:100],
             risk_flag=bool(summary_dict.get("risk_flag", False)),
             meta_json=summary_dict,
         )
@@ -572,8 +499,9 @@ def serve_aurora_audio(current_user, user_id, filename):
         print(str(e))
         print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n")
         return jsonify({"error": "audio_serve_failed"}), 500
-
-
+    
+    
+    
 """"""""""""""""""""""""""""
 # backend/aurora/routes_user.py
 from __future__ import annotations

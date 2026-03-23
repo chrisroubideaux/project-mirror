@@ -1,5 +1,5 @@
 # backend/aurora/brain_user.py
-
+# backend/aurora/brain_user.py
 import os
 import time
 from typing import List, Dict, Optional
@@ -14,32 +14,16 @@ client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 MODEL_NAME = os.getenv("AURORA_MODEL", "gpt-4o-mini")
 
 
-# ---------------------------------------------------
-# SYSTEM PROMPT BUILDER
-# ---------------------------------------------------
-
 def _build_system_prompt(
     user_id,
     relationship,
     guardrail_result,
     live_emotion: Optional[Dict] = None,
 ) -> str:
-    """
-    Builds dynamic Aurora system prompt using:
-    - Relationship model
-    - Personality engine
-    - Long-term memory
-    - Time context
-    - Guardrails
-    - Optional live emotional context
-    """
-
     familiarity = relationship.familiarity_score
     trust = relationship.trust_score
     rituals = relationship.ritual_preferences or {}
-    flags = relationship.flags_json or {}
 
-    # Personality resolution
     personality, effective = resolve_effective_personality(user_id)
 
     tone = effective["tone"]
@@ -53,36 +37,17 @@ def _build_system_prompt(
     preferred_name = rituals.get("preferred_name")
     distress_flag = guardrail_result.category == "emotional_distress"
 
-    # ---------------------------------------------------
-    # TIME CONTEXT
-    # ---------------------------------------------------
-
     time_instruction = (
         f"It is currently {time_context['time_of_day']} "
         f"on {time_context['day_name']}. "
         "You may naturally reference time-of-day if appropriate."
     )
 
-    # ---------------------------------------------------
-    # MEMORY INJECTION
-    # ---------------------------------------------------
-
     memory_records = fetch_user_memory(user_id)
     memory_instruction = ""
-
     if memory_records:
-        formatted_memory = []
-        for m in memory_records:
-            formatted_memory.append(f"{m.key}: {m.value}")
-
-        memory_instruction = (
-            "Long-term memory about this user:\n"
-            + "\n".join(formatted_memory)
-        )
-
-    # ---------------------------------------------------
-    # RELATIONSHIP INSTRUCTION
-    # ---------------------------------------------------
+        formatted_memory = [f"{m.key}: {m.value}" for m in memory_records]
+        memory_instruction = "Long-term memory about this user:\n" + "\n".join(formatted_memory)
 
     relationship_instruction = (
         f"Familiarity score: {familiarity}. "
@@ -90,10 +55,6 @@ def _build_system_prompt(
         f"Adaptive personality score: {adaptive_score:.2f}. "
         "Subtly let these influence warmth, depth, and openness."
     )
-
-    # ---------------------------------------------------
-    # PERSONALITY INSTRUCTION
-    # ---------------------------------------------------
 
     personality_instruction = (
         f"Current personality configuration:\n"
@@ -105,10 +66,6 @@ def _build_system_prompt(
         "Express these naturally. Do not mention configuration explicitly."
     )
 
-    # ---------------------------------------------------
-    # DISTRESS HANDLING
-    # ---------------------------------------------------
-
     distress_instruction = ""
     if distress_flag:
         distress_instruction = (
@@ -116,10 +73,6 @@ def _build_system_prompt(
             "Lead with empathy and validation. "
             "Do not escalate to crisis language unless explicit self-harm intent is stated."
         )
-
-    # ---------------------------------------------------
-    # LIVE EMOTION CONTEXT
-    # ---------------------------------------------------
 
     live_emotion_instruction = ""
     if (
@@ -145,19 +98,9 @@ def _build_system_prompt(
         except Exception:
             live_emotion_instruction = ""
 
-    # ---------------------------------------------------
-    # RITUAL INSTRUCTION
-    # ---------------------------------------------------
-
     ritual_instruction = ""
     if preferred_name:
-        ritual_instruction = (
-            f"Address the user as '{preferred_name}' naturally when appropriate."
-        )
-
-    # ---------------------------------------------------
-    # GUARDRAIL CONTEXT
-    # ---------------------------------------------------
+        ritual_instruction = f"Address the user as '{preferred_name}' naturally when appropriate."
 
     guardrail_context = ""
     if guardrail_result.category:
@@ -165,10 +108,6 @@ def _build_system_prompt(
             f"The user's last message triggered guardrail category: "
             f"{guardrail_result.category}. Maintain safe boundaries."
         )
-
-    # ---------------------------------------------------
-    # CORE IDENTITY
-    # ---------------------------------------------------
 
     base_prompt = (
         "You are Aurora, an emotionally intelligent AI companion. "
@@ -191,15 +130,7 @@ def _build_system_prompt(
     ])
 
 
-# ---------------------------------------------------
-# SHORT-TERM MEMORY
-# ---------------------------------------------------
-
 def _fetch_recent_messages(user_id, session_id, limit: int = 10) -> List[Dict]:
-    """
-    Fetch recent conversation turns (short-term memory).
-    """
-
     messages = (
         AuroraMessage.query
         .filter_by(user_id=user_id, session_id=session_id)
@@ -210,15 +141,8 @@ def _fetch_recent_messages(user_id, session_id, limit: int = 10) -> List[Dict]:
 
     messages = list(reversed(messages))
 
-    return [
-        {"role": m.role, "content": m.content}
-        for m in messages
-    ]
+    return [{"role": m.role, "content": m.content} for m in messages]
 
-
-# ---------------------------------------------------
-# MAIN REPLY GENERATOR
-# ---------------------------------------------------
 
 def generate_reply(
     user_id,
@@ -228,15 +152,6 @@ def generate_reply(
     guardrail_result,
     live_emotion: Optional[Dict] = None,
 ):
-    """
-    Generates Aurora response with:
-    - Relationship scaling
-    - Personality engine
-    - Memory
-    - Time awareness
-    - Optional live emotional context
-    """
-
     start_time = time.time()
 
     system_prompt = _build_system_prompt(
@@ -250,14 +165,12 @@ def generate_reply(
 
     messages_payload = [
         {"role": "system", "content": system_prompt}
-    ] + conversation_history + [
-        {"role": "user", "content": user_text}
-    ]
+    ] + conversation_history
 
     response = client.chat.completions.create(
         model=MODEL_NAME,
         messages=messages_payload,
-        max_tokens=400,
+        max_tokens=220,
         temperature=0.7,
     )
 

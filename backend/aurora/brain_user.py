@@ -1,4 +1,5 @@
 # backend/aurora/brain_user.py
+
 import os
 import time
 from typing import List, Dict, Optional
@@ -23,7 +24,7 @@ def _build_system_prompt(
     trust = relationship.trust_score
     rituals = relationship.ritual_preferences or {}
 
-    personality, effective = resolve_effective_personality(user_id)
+    _, effective = resolve_effective_personality(user_id)
 
     tone = effective["tone"]
     verbosity = effective["verbosity"]
@@ -113,7 +114,8 @@ def _build_system_prompt(
         "You are not a therapist and do not provide medical advice. "
         "You speak in a calm, grounded, human tone. "
         "You are adaptive, relational, and psychologically aware. "
-        "Avoid robotic phrasing. Avoid sounding scripted."
+        "Avoid robotic phrasing. Avoid sounding scripted. "
+        "You usually respond in 1 to 3 concise spoken sentences unless the user explicitly asks for more detail."
     )
 
     return "\n\n".join([
@@ -140,13 +142,15 @@ def _fetch_recent_messages(user_id, session_id, limit: int = 10) -> List[Dict]:
 
     messages = list(reversed(messages))
 
-    return [{"role": m.role, "content": m.content} for m in messages]
+    return [
+        {"role": m.role, "content": m.content}
+        for m in messages
+    ]
 
 
 def generate_reply(
     user_id,
     session_id,
-    user_text,
     relationship,
     guardrail_result,
     live_emotion: Optional[Dict] = None,
@@ -169,11 +173,11 @@ def generate_reply(
     response = client.chat.completions.create(
         model=MODEL_NAME,
         messages=messages_payload,
-        max_tokens=220,
+        max_tokens=90,
         temperature=0.7,
     )
 
-    reply_text = response.choices[0].message.content.strip()
+    reply_text = (response.choices[0].message.content or "").strip()
 
     duration_ms = int((time.time() - start_time) * 1000)
 

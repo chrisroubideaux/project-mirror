@@ -20,6 +20,7 @@ type AnySpeechRecognition = any;
 
 const TOKEN_KEY = "aurora_user_token";
 const clamp01 = (n: number) => Math.max(0, Math.min(1, n));
+const MIN_TRANSCRIPT_LEN = 4;
 
 function getSpeechCtor(): AnySpeechRecognition | null {
   if (typeof window === "undefined") return null;
@@ -27,7 +28,42 @@ function getSpeechCtor(): AnySpeechRecognition | null {
   return w.SpeechRecognition || w.webkitSpeechRecognition || null;
 }
 
-export default function UserAurora({ userName, onClose }: UserAuroraProps) {
+function normalizeSpeechText(text: string) {
+  return (text || "")
+    .toLowerCase()
+    .replace(/[^\w\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function isLikelyEcho(transcript: string, lastAssistantReply: string) {
+  const t = normalizeSpeechText(transcript);
+  const a = normalizeSpeechText(lastAssistantReply);
+
+  if (!t || !a) return false;
+  if (t.length < MIN_TRANSCRIPT_LEN) return true;
+
+  if (t === a) return true;
+  if (a.includes(t) && t.length >= 18) return true;
+  if (t.includes(a) && a.length >= 18) return true;
+
+  const tWords = new Set(t.split(" "));
+  const aWords = new Set(a.split(" "));
+  let overlap = 0;
+
+  for (const word of tWords) {
+    if (word.length >= 5 && aWords.has(word)) {
+      overlap += 1;
+    }
+  }
+
+  return overlap >= 5;
+}
+
+export default function UserAurora({
+  userName: _userName,
+  onClose,
+}: UserAuroraProps) {
   const aurora = useSelector((s: any) => s.aurora) as any;
 
   const sessionId = aurora.sessionId as string | null;
@@ -44,21 +80,18 @@ export default function UserAurora({ userName, onClose }: UserAuroraProps) {
   const [token, setToken] = useState<string | null>(null);
   const [audioEnergy, setAudioEnergy] = useState(0);
   const [listening, setListening] = useState(false);
-  const [cameraReady, setCameraReady] = useState(false);
 
   const apiBase = useMemo(() => getApiBase(), []);
 
   const recRef = useRef<AnySpeechRecognition | null>(null);
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
 
-  const frameIntervalRef = useRef<number | null>(null);
   const bootDoneRef = useRef(false);
   const greetDoneRef = useRef(false);
   const closedRef = useRef(false);
   const sendingRef = useRef(false);
-  const lastTextPadRef = useRef<PAD | null>(null);
+  const restartTimerRef = useRef<number | null>(null);
+  const lastAssistantReplyRef = useRef("");
+  const lastAudioEndedAtRef = useRef(0);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -88,32 +121,23 @@ export default function UserAurora({ userName, onClose }: UserAuroraProps) {
     [relationship, personalityEffective, trends]
   );
 
+  const clearRestartTimer = useCallback(() => {
+    if (restartTimerRef.current) {
+      window.clearTimeout(restartTimerRef.current);
+      restartTimerRef.current = null;
+    }
+  }, []);
+
   const stopListening = useCallback(() => {
+    clearRestartTimer();
     setListening(false);
+
     try {
       recRef.current?.stop();
     } catch {}
-  }, []);
 
-  const stopCamera = useCallback(() => {
-    if (frameIntervalRef.current) {
-      window.clearInterval(frameIntervalRef.current);
-      frameIntervalRef.current = null;
-    }
-
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => track.stop());
-      streamRef.current = null;
-    }
-
-    if (videoRef.current) {
-      try {
-        (videoRef.current as any).srcObject = null;
-      } catch {}
-    }
-
-    setCameraReady(false);
-  }, []);
+    recRef.current = null;
+  }, [clearRestartTimer]);
 
   const resetAuroraState = useCallback(() => {
     store.dispatch(auroraActions.setAudioUrl(null));
@@ -122,14 +146,42 @@ export default function UserAurora({ userName, onClose }: UserAuroraProps) {
     store.dispatch(auroraActions.setMode("idle"));
     store.dispatch(auroraActions.setSessionId(null));
     store.dispatch(auroraActions.setError(null));
+    lastAssistantReplyRef.current = "";
   }, []);
+
+  const scheduleListeningRestart = useCallback(() => {
+    clearRestartTimer();
+
+    restartTimerRef.current = window.setTimeout(() => {
+      restartTimerRef.current = null;
+
+      const currentMode = store.getState().aurora.mode as
+        | "idle"
+        | "thinking"
+        | "speaking"
+        | "settling";
+
+      if (closedRef.current) return;
+      if (sendingRef.current) return;
+      if (recRef.current) return;
+      if (audioUrl) return;
+      if (currentMode !== "idle") return;
+
+      const msSinceAudioEnd = Date.now() - lastAudioEndedAtRef.current;
+      if (lastAudioEndedAtRef.current && msSinceAudioEnd < 350) {
+        scheduleListeningRestart();
+        return;
+      }
+
+      startListening();
+    }, 350);
+  }, [audioUrl, clearRestartTimer]);
 
   const handleClose = useCallback(async () => {
     if (closedRef.current) return;
     closedRef.current = true;
 
     stopListening();
-    stopCamera();
 
     if (token && sessionId) {
       try {
@@ -145,7 +197,7 @@ export default function UserAurora({ userName, onClose }: UserAuroraProps) {
 
     resetAuroraState();
     onClose();
-  }, [apiBase, onClose, resetAuroraState, sessionId, stopCamera, stopListening, token]);
+  }, [apiBase, onClose, resetAuroraState, sessionId, stopListening, token]);
 
   const bootstrap = useCallback(async () => {
     if (!token) {
@@ -213,6 +265,10 @@ export default function UserAurora({ userName, onClose }: UserAuroraProps) {
 
       console.log("Aurora greet response:", resp);
 
+      if (resp?.assistant_reply) {
+        lastAssistantReplyRef.current = resp.assistant_reply;
+      }
+
       if (resp?.session_id) {
         store.dispatch(auroraActions.setSessionId(resp.session_id));
       }
@@ -232,9 +288,19 @@ export default function UserAurora({ userName, onClose }: UserAuroraProps) {
 
   const sendTextToAurora = useCallback(
     async (text: string) => {
-      if (!token || !text.trim() || sendingRef.current) return;
+      const cleaned = text.trim();
+
+      if (!token || !cleaned || sendingRef.current) return;
+      if (cleaned.length < MIN_TRANSCRIPT_LEN) return;
+
+      if (isLikelyEcho(cleaned, lastAssistantReplyRef.current)) {
+        console.warn("Blocked likely Aurora echo transcript:", cleaned);
+        scheduleListeningRestart();
+        return;
+      }
 
       sendingRef.current = true;
+      clearRestartTimer();
       store.dispatch(auroraActions.setError(null));
       store.dispatch(auroraActions.setMode("thinking"));
 
@@ -243,13 +309,16 @@ export default function UserAurora({ userName, onClose }: UserAuroraProps) {
           method: "POST",
           token,
           body: {
-            message: text.trim(),
+            message: cleaned,
             session_id: sessionId ?? undefined,
-            live_face_pad: liveTarget ?? undefined,
           },
         });
 
         console.log("Aurora converse response:", resp);
+
+        if (resp?.assistant_reply) {
+          lastAssistantReplyRef.current = resp.assistant_reply;
+        }
 
         if (resp?.session_id) {
           store.dispatch(auroraActions.setSessionId(resp.session_id));
@@ -264,44 +333,13 @@ export default function UserAurora({ userName, onClose }: UserAuroraProps) {
           })
         );
 
-        const emo = resp.emotion || {};
-
-        const fusedPad: PAD | null =
-          emo?.fused_live_pad &&
-          emo.fused_live_pad.valence != null &&
-          emo.fused_live_pad.arousal != null &&
-          emo.fused_live_pad.dominance != null
-            ? {
-                valence: clamp01(Number(emo.fused_live_pad.valence)),
-                arousal: clamp01(Number(emo.fused_live_pad.arousal)),
-                dominance: clamp01(Number(emo.fused_live_pad.dominance)),
-              }
-            : null;
-
-        const textPad: PAD | null =
-          emo?.valence != null &&
-          emo?.arousal != null &&
-          emo?.dominance != null
-            ? {
-                valence: clamp01(Number(emo.valence)),
-                arousal: clamp01(Number(emo.arousal)),
-                dominance: clamp01(Number(emo.dominance)),
-              }
-            : null;
-
-        lastTextPadRef.current = textPad;
-
-        if (fusedPad) {
-          store.dispatch(auroraActions.setLiveTarget(fusedPad));
-        } else if (textPad) {
-          store.dispatch(auroraActions.setLiveTarget(textPad));
-        }
-
         const url = resp.audio_url ?? null;
         store.dispatch(auroraActions.setAudioUrl(url));
 
         if (!url) {
           console.warn("Aurora converse returned no audio_url");
+          store.dispatch(auroraActions.setMode("idle"));
+          scheduleListeningRestart();
         }
 
         computeAndSetBaseline({
@@ -315,19 +353,37 @@ export default function UserAurora({ userName, onClose }: UserAuroraProps) {
         console.error("Aurora converse failed:", e);
         store.dispatch(auroraActions.setError(e?.message || "Aurora failed to respond."));
         store.dispatch(auroraActions.setMode("idle"));
+        scheduleListeningRestart();
       } finally {
         window.setTimeout(() => {
           sendingRef.current = false;
         }, 150);
       }
     },
-    [apiBase, computeAndSetBaseline, liveTarget, relationship, sessionId, token]
+    [
+      apiBase,
+      clearRestartTimer,
+      computeAndSetBaseline,
+      relationship,
+      scheduleListeningRestart,
+      sessionId,
+      token,
+    ]
   );
 
   const startListening = useCallback(() => {
     if (closedRef.current) return;
     if (mode === "thinking" || mode === "speaking") return;
     if (listening) return;
+    if (sendingRef.current) return;
+    if (audioUrl) return;
+    if (recRef.current) return;
+
+    const msSinceAudioEnd = Date.now() - lastAudioEndedAtRef.current;
+    if (lastAudioEndedAtRef.current && msSinceAudioEnd < 350) {
+      scheduleListeningRestart();
+      return;
+    }
 
     const SpeechCtor = getSpeechCtor();
     if (!SpeechCtor) {
@@ -337,27 +393,50 @@ export default function UserAurora({ userName, onClose }: UserAuroraProps) {
       return;
     }
 
+    clearRestartTimer();
+
     const rec = new SpeechCtor();
     recRef.current = rec;
 
     rec.lang = "en-US";
     rec.interimResults = false;
     rec.continuous = false;
+    rec.maxAlternatives = 1;
 
     setListening(true);
 
     rec.onresult = (event: any) => {
       const transcript = event?.results?.[0]?.[0]?.transcript?.trim?.() || "";
-      setListening(false);
 
-      if (transcript) {
-        sendTextToAurora(transcript);
+      setListening(false);
+      recRef.current = null;
+
+      if (!transcript || transcript.length < MIN_TRANSCRIPT_LEN) {
+        scheduleListeningRestart();
+        return;
       }
+
+      if (isLikelyEcho(transcript, lastAssistantReplyRef.current)) {
+        console.warn("Blocked likely Aurora echo transcript:", transcript);
+        scheduleListeningRestart();
+        return;
+      }
+
+      sendTextToAurora(transcript);
     };
 
     rec.onerror = (event: any) => {
-      console.warn("Aurora speech recognition error:", event?.error, event);
+      const err = event?.error;
+
       setListening(false);
+      recRef.current = null;
+
+      if (err === "aborted" || err === "no-speech") {
+        scheduleListeningRestart();
+        return;
+      }
+
+      console.warn("Aurora speech recognition error:", err, event);
 
       const fatalErrors = new Set([
         "not-allowed",
@@ -365,28 +444,32 @@ export default function UserAurora({ userName, onClose }: UserAuroraProps) {
         "audio-capture",
       ]);
 
-      if (fatalErrors.has(event?.error)) {
-        store.dispatch(
-          auroraActions.setError(`Speech recognition error: ${event?.error}`)
-        );
+      if (fatalErrors.has(err)) {
+        store.dispatch(auroraActions.setError(`Speech recognition error: ${err}`));
         return;
       }
 
-      window.setTimeout(() => {
-        if (!closedRef.current && mode !== "speaking" && mode !== "thinking") {
-          startListening();
-        }
-      }, 700);
+      scheduleListeningRestart();
     };
 
     rec.onend = () => {
       setListening(false);
+      recRef.current = null;
 
-      window.setTimeout(() => {
-        if (!closedRef.current && mode !== "speaking" && mode !== "thinking") {
-          startListening();
-        }
-      }, 500);
+      const currentMode = store.getState().aurora.mode as
+        | "idle"
+        | "thinking"
+        | "speaking"
+        | "settling";
+
+      if (
+        !closedRef.current &&
+        !sendingRef.current &&
+        !audioUrl &&
+        currentMode === "idle"
+      ) {
+        scheduleListeningRestart();
+      }
     };
 
     try {
@@ -394,103 +477,17 @@ export default function UserAurora({ userName, onClose }: UserAuroraProps) {
     } catch (e) {
       console.warn("Aurora speech recognition start failed:", e);
       setListening(false);
+      recRef.current = null;
+      scheduleListeningRestart();
     }
-  }, [listening, mode, sendTextToAurora]);
-
-  const sendCameraFrame = useCallback(async () => {
-    if (!token) return;
-    if (!videoRef.current || !canvasRef.current) return;
-    if (!cameraReady) return;
-
-    const video = videoRef.current;
-    const canvas = canvasRef.current;
-
-    if (!video.videoWidth || !video.videoHeight) return;
-
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-    const blob = await new Promise<Blob | null>((resolve) =>
-      canvas.toBlob((b) => resolve(b), "image/jpeg", 0.75)
-    );
-
-    if (!blob) return;
-
-    try {
-      const form = new FormData();
-      form.append("frame", blob, "frame.jpg");
-
-      if (lastTextPadRef.current) {
-        form.append("text_valence", String(lastTextPadRef.current.valence));
-        form.append("text_arousal", String(lastTextPadRef.current.arousal));
-        form.append("text_dominance", String(lastTextPadRef.current.dominance));
-      }
-
-      const res = await fetch(`${apiBase}/api/user/aurora/emotion`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-        body: form,
-      });
-
-      if (!res.ok) return;
-
-      const data = await res.json();
-
-      if (data?.smoothed_pad) {
-        store.dispatch(
-          auroraActions.setLiveTarget({
-            valence: clamp01(Number(data.smoothed_pad.valence)),
-            arousal: clamp01(Number(data.smoothed_pad.arousal)),
-            dominance: clamp01(Number(data.smoothed_pad.dominance)),
-          })
-        );
-      }
-    } catch (e) {
-      console.warn("Aurora emotion frame send failed:", e);
-    }
-  }, [apiBase, cameraReady, token]);
-
-  const startCamera = useCallback(async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: "user",
-          width: { ideal: 640 },
-          height: { ideal: 480 },
-        },
-        audio: false,
-      });
-
-      streamRef.current = stream;
-
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
-      }
-
-      setCameraReady(true);
-
-      if (frameIntervalRef.current) {
-        window.clearInterval(frameIntervalRef.current);
-      }
-
-      frameIntervalRef.current = window.setInterval(() => {
-        sendCameraFrame();
-      }, 1300);
-    } catch (e: any) {
-      console.error("Aurora camera failed:", e);
-      store.dispatch(
-        auroraActions.setError(e?.message || "Camera permission denied or unavailable.")
-      );
-    }
-  }, [sendCameraFrame]);
+  }, [
+    audioUrl,
+    clearRestartTimer,
+    listening,
+    mode,
+    scheduleListeningRestart,
+    sendTextToAurora,
+  ]);
 
   useEffect(() => {
     if (!token) return;
@@ -500,13 +497,12 @@ export default function UserAurora({ userName, onClose }: UserAuroraProps) {
     store.dispatch(auroraActions.setError(null));
 
     bootstrap();
-    startCamera();
 
     return () => {
       stopListening();
-      stopCamera();
+      clearRestartTimer();
     };
-  }, [bootstrap, startCamera, stopCamera, stopListening, token]);
+  }, [bootstrap, clearRestartTimer, stopListening, token]);
 
   useEffect(() => {
     if (!token) return;
@@ -521,20 +517,27 @@ export default function UserAurora({ userName, onClose }: UserAuroraProps) {
   }, [token, triggerGreeting]);
 
   useEffect(() => {
-    if (mode === "idle" || mode === "settling") {
-      const timer = window.setTimeout(() => {
-        if (!closedRef.current && !audioUrl) {
-          startListening();
-        }
-      }, 500);
-
-      return () => window.clearTimeout(timer);
+    if (mode !== "idle") {
+      if (mode === "thinking" || mode === "speaking") {
+        stopListening();
+      }
+      return;
     }
 
-    if (mode === "thinking" || mode === "speaking") {
-      stopListening();
-    }
-  }, [audioUrl, mode, startListening, stopListening]);
+    const timer = window.setTimeout(() => {
+      if (
+        !closedRef.current &&
+        !audioUrl &&
+        !sendingRef.current &&
+        !listening &&
+        !recRef.current
+      ) {
+        startListening();
+      }
+    }, 250);
+
+    return () => window.clearTimeout(timer);
+  }, [audioUrl, listening, mode, startListening, stopListening]);
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -618,40 +621,39 @@ export default function UserAurora({ userName, onClose }: UserAuroraProps) {
               ? "Speaking…"
               : listening
               ? "Listening…"
-              : "Present…"}
+              : "Present..."}
           </div>
         </div>
       </div>
-
-      <video ref={videoRef} autoPlay playsInline muted style={{ display: "none" }} />
-      <canvas ref={canvasRef} style={{ display: "none" }} />
 
       <AuroraAudioController
         audioUrl={audioUrl}
         token={token}
         onStart={() => {
           console.log("Aurora audio start:", audioUrl);
+          clearRestartTimer();
+          stopListening();
           store.dispatch(auroraActions.setAudioPlaying(true));
           store.dispatch(auroraActions.setMode("speaking"));
           store.dispatch(auroraActions.setError(null));
         }}
         onEnd={() => {
           console.log("Aurora audio end");
+          lastAudioEndedAtRef.current = Date.now();
           store.dispatch(auroraActions.setAudioPlaying(false));
           store.dispatch(auroraActions.setAudioUrl(null));
-          store.dispatch(auroraActions.setMode("settling"));
-
-          window.setTimeout(() => {
-            store.dispatch(auroraActions.setMode("idle"));
-          }, 650);
+          store.dispatch(auroraActions.setMode("idle"));
+          scheduleListeningRestart();
         }}
         onEnergy={(e) => setAudioEnergy(e)}
         onError={(err) => {
           console.error("Aurora audio error:", err, audioUrl);
+          lastAudioEndedAtRef.current = Date.now();
           store.dispatch(auroraActions.setError(err));
           store.dispatch(auroraActions.setAudioPlaying(false));
           store.dispatch(auroraActions.setAudioUrl(null));
           store.dispatch(auroraActions.setMode("idle"));
+          scheduleListeningRestart();
         }}
       />
 
@@ -678,7 +680,6 @@ export default function UserAurora({ userName, onClose }: UserAuroraProps) {
     </div>
   );
 }
-
 {
 
 /*
